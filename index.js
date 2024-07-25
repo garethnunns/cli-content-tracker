@@ -8,6 +8,7 @@ import figlet from 'figlet'
 import chalk from 'chalk'
 import { exit } from 'process'
 import Airtable from 'airtable'
+import deepEqual from 'assert'
 
 const conf = new Conf({projectName: 'content-tracker'})
 
@@ -78,7 +79,67 @@ config.settings.files.excludes = config?.settings?.files?.excludes ?? []
 config.settings.files.includes = deserialiseREArray(config.settings.files.includes)
 config.settings.files.excludes = deserialiseREArray(config.settings.files.excludes)
 
-console.log(getFileList(config.settings.files.dir, config.settings.files.includes, config.settings.files.excludes))
+let fileList = rList(config.settings.files.dir, config.settings.files.includes, config.settings.files.excludes)
+
+function rList(dir, includes = [], excludes = []) {
+	let result = {
+		dirs: [],
+		files: []
+	}
+	const list = fs.readdirSync(dir)
+
+	list.forEach(file => {
+		// full file/folder path
+		file = path.join(dir, file)
+
+		// work out if we should track this path
+		let allowed = false
+
+		if(includes.length)
+			includes.array.forEach(include => {
+				if(file.match(include))
+					allowed = true
+			})
+		else
+			allowed = true
+
+		excludes.forEach(exclude => {
+			if(file.match(exclude))
+				allowed = false
+		})
+			
+
+		const stat = fs.statSync(file)
+		const fileStat = {
+			_path: file,
+			_size: stat.size,
+			_ctime: stat.ctime.toISOString(),
+			_mtime: stat.mtime.toISOString()
+		}
+
+		if (stat.isDirectory()) {
+			if(allowed) {
+				fileStat._items = fs.readdirSync(file).length
+				result.dirs.push(fileStat)
+			}
+
+			// get everything within that folder
+			const subFiles = rList(file, includes, excludes)
+
+			result.dirs = result.dirs.concat(subFiles.dirs)
+			result.files = result.files.concat(subFiles.files)
+		}
+		else {
+			// it's a file
+			if(allowed)
+				result.files.push(fileStat)
+		}
+
+	})
+
+	return result
+}
+
 
 /**
  * Deserialise an array of regular expressions (from the config)
@@ -146,11 +207,12 @@ function getFileList(dir, includes = [], excludes = []) {
 
 // airtable excitement proceeds
 const base = new Airtable({apiKey: config.settings.airtable.api}).base(config.settings.airtable.base)
-const foldersView = base(config.settings.airtable.foldersID).select({
+const foldersTable = base(config.settings.airtable.foldersID)
+const foldersView = foldersTable.select({
 	view: config.settings.airtable.view
 })
 
-console.log(await airtableToArray(foldersView))
+let foldersList = await airtableToArray(foldersView)
 
 /** Create array of objects from Airtable view */
 async function airtableToArray(view) {
@@ -161,3 +223,30 @@ async function airtableToArray(view) {
 	const arr = result.map(r => r.fields);
 	return arr;
 }
+
+function checkDifferences(locals,webs) {
+	//console.log(locals)
+	//console.log(webs)
+
+	let result = { updates: [] }
+
+	locals.forEach((local, lIndex) => {
+		const wIndex = webs.findIndex(web => local._path == web._path)
+
+		if(wIndex > -1) {
+			// found the same file on the web table
+			if(!deepEqual(local,webs[wIndex]))
+				result.updates.push(local)
+
+			delete locals[lIndex]
+			webs.splice(wIndex,1)
+		}
+	})
+
+	result.inserts = locals.filter(el => el != null)
+	result.deletes = webs
+
+	return result
+}
+
+const diffs = checkDifferences(fileList.dirs,foldersList)
