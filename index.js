@@ -9,6 +9,7 @@ import chalk from 'chalk'
 import { exit } from 'process'
 import Airtable from 'airtable'
 import deepEqual from 'assert'
+import _ from 'lodash'
 
 const conf = new Conf({projectName: 'content-tracker'})
 
@@ -79,6 +80,7 @@ config.settings.files.excludes = config?.settings?.files?.excludes ?? []
 config.settings.files.includes = deserialiseREArray(config.settings.files.includes)
 config.settings.files.excludes = deserialiseREArray(config.settings.files.excludes)
 
+console.info(chalk.blue("Scanning folders"))
 let fileList = rList(config.settings.files.dir, config.settings.files.includes, config.settings.files.excludes)
 
 function rList(dir, includes = [], excludes = []) {
@@ -212,6 +214,7 @@ const foldersView = foldersTable.select({
 	view: config.settings.airtable.view
 })
 
+console.info(chalk.blue("Fetching folder list from AirTable"))
 let foldersList = await airtableToArray(foldersView)
 
 /** Create array of objects from Airtable view */
@@ -220,23 +223,29 @@ async function airtableToArray(view) {
 	const result = await view.all();
 
 	/* pull raw objects from the result */
-	const arr = result.map(r => r.fields);
+	const arr = result.map(r => {
+		return {
+			id: r.id,
+			fields: r.fields
+		}
+	});
+
 	return arr;
 }
 
 function checkDifferences(locals,webs) {
-	//console.log(locals)
-	//console.log(webs)
-
 	let result = { updates: [] }
 
 	locals.forEach((local, lIndex) => {
-		const wIndex = webs.findIndex(web => local._path == web._path)
+		const wIndex = webs.findIndex(web => local._path == web.fields._path)
 
 		if(wIndex > -1) {
 			// found the same file on the web table
-			if(!deepEqual(local,webs[wIndex]))
-				result.updates.push(local)
+			if(!_.isEqual(local,webs[wIndex].fields))
+				result.updates.push({
+					id: webs[wIndex].id,
+					fields: local
+				})
 
 			delete locals[lIndex]
 			webs.splice(wIndex,1)
@@ -249,4 +258,52 @@ function checkDifferences(locals,webs) {
 	return result
 }
 
+console.info(chalk.blue("Consoling the differences between the local files and AirTable"))
+
 const diffs = checkDifferences(fileList.dirs,foldersList)
+
+console.info(chalk.blue("Updating AirTable"))
+console.info(chalk.green(diffs.inserts.length) + " folders to be added")
+console.info(chalk.yellow(diffs.updates.length) + " folders to be modified")
+console.info(chalk.magenta(diffs.deletes.length) + " folders to be deleted")
+
+updateAT(diffs, foldersTable)
+
+function updateAT(diffs, table) {
+	// inserts
+	for (let i = 0; i < diffs.inserts.length; i+=10) {
+		// insert in blocks of 10
+		table.create(diffs.inserts.slice(i, i+10).map(r => {return {fields: r}}), function(err, records) {
+			if (err) {
+				console.error(err);
+				return;
+			}
+			records.forEach(function(record) {
+				console.log(chalk.green("Inserted " + record.get('_path')));
+			});
+		})
+	}
+	
+	// updates
+	for (let i = 0; i < diffs.updates.length; i+=10) {
+		// update in blocks of 10
+		table.update(diffs.updates.slice(i, i+10), function(err, records) {
+			if (err) {
+				console.error(err);
+				return;
+			}
+			console.log(chalk.yellow("Updated " + records[0].get('_path') + " and " + (records.length-1) + " other records"))
+		})
+	}
+
+	for (let i = 0; i < diffs.deletes.length; i+=10) {
+		// delete in blocks of 10
+		table.destroy(diffs.deletes.slice(i, i+10).map(r => r.id), function(err, records) {
+			if (err) {
+				console.error(err);
+				return;
+			}
+			console.log(chalk.magenta("Deleted " + records.length + " records"))
+		})
+	}
+}
