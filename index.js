@@ -8,8 +8,6 @@ import { exit } from 'process'
 import Airtable from 'airtable'
 import * as Tracker from './Tracker.js'
 
-const fields = ["_path", "_size", "_ctime", "_mtime", "_items"]
-
 const pjson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
 
 const program = new Command()
@@ -17,6 +15,7 @@ program
 	.version(pjson.version)
 	.description(pjson.description)
 	.option('-c, --config <path>', 'Config file path (if none specified template will be created)')
+	.option('-d, --dry-run','Will do everything apart from updating AirTable')
 	.parse(process.argv);
 
 const options = program.opts()
@@ -62,7 +61,7 @@ if(!options.config) {
 		RegExp.prototype.toJSON = RegExp.prototype.toString
 
 		fs.writeFileSync('config.json',JSON.stringify(defaults,null,2))
-		console.log(chalk.blue("Template file created - please updates with API keys and settings"))
+		console.log(chalk.blue("Template config file created - please updates with settings & API keys, then re-run with -c <path>"))
 		exit(0)
 	}
 	catch (err) {
@@ -105,13 +104,13 @@ try {
 	foldersTable = base(config.settings.airtable.foldersID)
 	foldersView = foldersTable.select({
 		view: config.settings.airtable.view,
-		fields: fields
+		fields: Tracker.dirFields
 	})
 
 	filesTable = base(config.settings.airtable.filesID)
 	filesView = filesTable.select({
 		view: config.settings.airtable.view,
-		fields: fields
+		fields: Tracker.fileFields
 	})
 }
 catch (err) {
@@ -131,6 +130,7 @@ else
 async function contentTracker() {
 	console.info(chalk.blue("Scanning folders"))
 	let fileList = Tracker.rList(config.settings.files.dir, config.settings.files.rules)
+	console.info(chalk.blue("Found " + fileList.dirs.length +" folders & " + fileList.files.length + " files "))
 
 	if(fileList.dirs.length > 0) {
 		// only bother doing this if we found any files
@@ -152,8 +152,17 @@ async function contentTracker() {
 		console.info(chalk.yellow(fileDiffs.updates.length) + " files to be modified")
 		console.info(chalk.magenta(fileDiffs.deletes.length) + " files to be deleted")
 
-		console.info(chalk.blue("Updating AirTable"))
-		Tracker.updateAT(folderDiffs, foldersTable)
-		Tracker.updateAT(fileDiffs, filesTable)
+		if(!options.dryRun) {
+			console.info(chalk.blue("Updating AirTable"))
+			Tracker.updateAT(folderDiffs, foldersTable)
+			Tracker.updateAT(fileDiffs, filesTable)
+		}
+		else {
+			console.info(chalk.bgBlue("[DRY RUN] -  Folders:"))
+			console.info(folderDiffs)
+
+			console.info(chalk.bgBlue("[DRY RUN] -  Files:"))
+			console.info(fileDiffs)
+		}
 	}
 }

@@ -1,6 +1,6 @@
 {
   "name": "cli-content-tracker",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -17,7 +17,6 @@
     "airtable": "^0.12.2",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
-    "conf": "^13.0.1",
     "figlet": "^1.7.0",
     "lodash": "^4.17.21"
   }

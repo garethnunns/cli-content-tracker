@@ -4,6 +4,8 @@ import _ from 'lodash'
 
 import chalk from 'chalk' // TODO: remove all logging from here...
 
+export const dirFields = ["_path", "_size", "_ctime", "_mtime", "_items"]
+export const fileFields = ["_path", "_size", "_ctime", "_mtime"]
 
 /**
  * Recursively get all the contained files and folders for the given dir
