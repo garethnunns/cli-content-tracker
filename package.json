@@ -1,6 +1,6 @@
 {
   "name": "@garethnunns/cli-content-tracker",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -25,7 +25,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/garethnunns/cli-content-tracker.git"
+    "url": "https://github.com/garethnunns/cli-content-tracker.git"
   },
   "bugs": {
     "url": "https://github.com/garethnunns/cli-content-tracker/issues"
