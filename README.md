@@ -4,12 +4,8 @@ This project came about as a means to track video content on concert shows, but 
 
 ## Quick Start Installation
 
-_Will require Git & npm to be installed_
-
 ```sh
-git clone https://github.com/garethnunns/cli-content-tracker.git
-cd cli-content-tracker
-npm install
+npm install @garethnunns/cli-content-tracker@0.1.2
 npm link
 tracker
 ```
@@ -17,6 +13,12 @@ tracker
 _You can always `npm unlink` this later._
 
 Then you just need to [edit the `config.json`](#config-file) and re-run with the [config command line option `tracker -c`](#config-option--c---config-).
+
+_Will require npm to be installed, if on Mac probably install with Homebrew:_
+```sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install node
+```
 
 ## AirTable Setup
 
