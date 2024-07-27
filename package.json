@@ -1,6 +1,6 @@
 {
   "name": "@garethnunns/cli-content-tracker",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -19,6 +19,9 @@
     "commander": "^12.1.0",
     "figlet": "^1.7.0",
     "lodash": "^4.17.21"
+  },
+  "publishConfig": {
+    "@garethnunns:registry": "https://npm.pkg.github.com"
   },
   "repository": {
     "type": "git",
