@@ -8,11 +8,10 @@ import chalk from 'chalk' // TODO: remove all logging from here...
 /**
  * Recursively get all the contained files and folders for the given dir
  * @param {string} dir 
- * @param {array} includes array of regex allowed files
- * @param {*} excludes array of regex excluded files
+ * @param {object} includes object containing the rules for including and excluding dirs/files
  * @returns object containing the arrays of objects .dirs & .files
  */
-export function rList(dir, includes = [], excludes = []) {
+export function rList(dir, rules) {
 	let result = {
 		dirs: [],
 		files: []
@@ -23,23 +22,6 @@ export function rList(dir, includes = [], excludes = []) {
 		// full file/folder path
 		file = path.join(dir, file)
 
-		// work out if we should track this path
-		let allowed = false
-
-		if(includes.length)
-			includes.array.forEach(include => {
-				if(file.match(include))
-					allowed = true
-			})
-		else
-			allowed = true
-
-		excludes.forEach(exclude => {
-			if(file.match(exclude))
-				allowed = false
-		})
-				
-
 		const stat = fs.statSync(file)
 		const fileStat = {
 			_path: file,
@@ -49,25 +31,54 @@ export function rList(dir, includes = [], excludes = []) {
 		}
 
 		if (stat.isDirectory()) {
-			if(allowed) {
+			if(isAllowed(file, rules.dirs)) {
 				fileStat._items = fs.readdirSync(file).length
 				result.dirs.push(fileStat)
 			}
 
 			// get everything within that folder
-			const subFiles = rList(file, includes, excludes)
+			const subFiles = rList(file, rules)
 
 			result.dirs = result.dirs.concat(subFiles.dirs)
 			result.files = result.files.concat(subFiles.files)
 		}
 		else {
 			// it's a file
-			if(allowed)
+			if(isAllowed(file, rules.files))
 				result.files.push(fileStat)
 		}
 	})
 
 	return result
+}
+
+/**
+ * Work out if we're allowed a file based on the rules
+ * @param {string} file file path to match
+ * @param {object} rules object of arrays .includes & .excludes
+ * @returns {boolean}
+ */
+export function isAllowed(file, rules) {
+	// assume we're not allowed it
+	let allowed = false
+
+	if(rules.includes.length)
+		// if we're being selective then it must match one of the allowed
+		rules.includes.forEach(include => {
+			if(file.match(include))
+				allowed = true
+		})
+	else
+		// otherwise everything goes
+		allowed = true
+
+	// unless it's not allowed in the excludes
+	rules.excludes.forEach(exclude => {
+		if(file.match(exclude))
+			allowed = false
+	})
+
+	return allowed
 }
 
 /**
