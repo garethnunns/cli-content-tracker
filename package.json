@@ -1,6 +1,6 @@
 {
   "name": "@garethnunns/cli-content-tracker",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -20,12 +20,9 @@
     "figlet": "^1.7.0",
     "lodash": "^4.17.21"
   },
-  "publishConfig": {
-    "@garethnunns:registry": "https://npm.pkg.github.com"
-  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/garethnunns/cli-content-tracker.git"
+    "url": "git+https://github.com/garethnunns/cli-content-tracker.git"
   },
   "bugs": {
     "url": "https://github.com/garethnunns/cli-content-tracker/issues"
