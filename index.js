@@ -8,7 +8,8 @@ import { exit } from 'process'
 import Airtable from 'airtable'
 import * as Tracker from './Tracker.js'
 
-const pjson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const loadJSON = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url)))
+const pjson = loadJSON('./package.json')
 
 const program = new Command()
 program
