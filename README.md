@@ -2,19 +2,15 @@
 
 This project came about as a means to track video content on concert shows, but is written generically. It recursively scans folders, which can be mapped network drives or streamed cloud storage like Dropbox, Drive, LucidLink or Suite and stores a list of the files & folders on AirTable.
 
-## Quick Start Installation
+## Quick Start
 
 ```sh
-npm install @garethnunns/cli-content-tracker@0.1.2
-npm link
-tracker
+npx @garethnunns/cli-content-tracker
 ```
 
-_You can always `npm unlink` this later._
+Then you just need to [edit the `config.json` file](#config-file) that was created where the command was executed and re-run with the [config command line option `tracker -c`](#config-option--c---config-).
 
-Then you just need to [edit the `config.json`](#config-file) and re-run with the [config command line option `tracker -c`](#config-option--c---config-).
-
-_Will require npm to be installed, if on Mac probably install with Homebrew:_
+_Will require Node to be installed, if on Mac probably install with Homebrew:_
 ```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 brew install node
@@ -198,3 +194,19 @@ This defaults to a view called `API`:
 ```json
 "view": "API"
 ```
+
+## Development
+
+Clone the repo and run it locally like so:
+
+```sh
+git clone https://github.com/garethnunns/cli-content-tracker.git
+cd cli-content-tracker
+npm install
+npm link
+tracker
+```
+
+_You can always `npm unlink` this later._
+
+Very welcome to pull requests!
