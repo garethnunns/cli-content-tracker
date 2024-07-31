@@ -24,30 +24,35 @@ export function rList(dir, rules) {
 		// full file/folder path
 		file = path.join(dir, file)
 
-		const stat = fs.statSync(file)
-		const fileStat = {
-			_path: file,
-			_size: stat.size,
-			_ctime: stat.ctime.toISOString(),
-			_mtime: stat.mtime.toISOString()
-		}
-
-		if (stat.isDirectory()) {
-			if(isAllowed(file, rules.dirs)) {
-				fileStat._items = fs.readdirSync(file).length
-				result.dirs.push(fileStat)
+		try {
+			const stat = fs.statSync(file)
+			const fileStat = {
+				_path: file,
+				_size: stat.size,
+				_ctime: stat.ctime.toISOString(),
+				_mtime: stat.mtime.toISOString()
 			}
 
-			// get everything within that folder
-			const subFiles = rList(file, rules)
+			if (stat.isDirectory()) {
+				if(isAllowed(file, rules.dirs)) {
+					fileStat._items = fs.readdirSync(file).length
+					result.dirs.push(fileStat)
+				}
 
-			result.dirs = result.dirs.concat(subFiles.dirs)
-			result.files = result.files.concat(subFiles.files)
+				// get everything within that folder
+				const subFiles = rList(file, rules)
+
+				result.dirs = result.dirs.concat(subFiles.dirs)
+				result.files = result.files.concat(subFiles.files)
+			}
+			else {
+				// it's a file
+				if(isAllowed(file, rules.files))
+					result.files.push(fileStat)
+			}
 		}
-		else {
-			// it's a file
-			if(isAllowed(file, rules.files))
-				result.files.push(fileStat)
+		catch (err) {
+			console.warn(chalk.yellow("Failed to read " + file))
 		}
 	})
 
