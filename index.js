@@ -7,6 +7,7 @@ import chalk from 'chalk'
 import { exit } from 'process'
 import Airtable from 'airtable'
 import * as Tracker from './Tracker.js'
+import { logger } from './logger.js'
 
 const loadJSON = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url)))
 const pjson = loadJSON('./package.json')
@@ -62,12 +63,12 @@ if(!options.config) {
 		RegExp.prototype.toJSON = RegExp.prototype.toString
 
 		fs.writeFileSync('config.json',JSON.stringify(defaults,null,2))
-		console.log(chalk.blue("Template config file created - please updates with settings & API keys, then re-run with -c <path>"))
+		logger.warn("Template config file created - please updates with settings & API keys, then re-run with -c <path>")
 		exit(0)
 	}
 	catch (err) {
-		console.error(chalk.red("Failed to create template config file"))
-		console.error(chalk.red(err))
+		logger.warn("Failed to create template config file")
+		logger.error(err)
 		exit(1)
 	}
 }
@@ -79,8 +80,8 @@ try {
 	config = JSON.parse(fs.readFileSync(options.config, 'utf8'))
 }
 catch (err) {
-	console.error(chalk.red("Failed to load config file"))
-	console.error(chalk.red(err))
+	logger.warn("Failed to load config file")
+	logger.error(err)
 	exit(2)
 }
 
@@ -94,9 +95,16 @@ for(let type in config.settings.files.rules)
 	for(let rule in config.settings.files.rules[type])
 		config.settings.files.rules[type][rule] = Tracker.deserialiseREArray(config.settings.files.rules[type][rule])
 
-// TODO: check the dir exists and throw an exit code if it doesn't
+try {
+	fs.readdirSync(config.settings.files.dir)
+}
+catch(err) {
+	logger.warn('Could not access the folder "%s"', config.settings.files.dir)
+	logger.error(err)
+	exit(3)
+}
 
-console.info(chalk.blue("Attempting AirTable connection"))
+logger.verbose("Attempting AirTable connection")
 
 let base, foldersTable, foldersView, filesTable, filesView
 try {
@@ -115,9 +123,9 @@ try {
 	})
 }
 catch (err) {
-	console.error(chalk.red("Failed to make AirTable Connection"))
-	console.error(chalk.red(err))
-	exit(3)
+	logger.error("Failed to make AirTable Connection")
+	logger.error(err)
+	exit(4)
 }
 
 if(config.settings.files.frequency > 0) {
@@ -129,41 +137,68 @@ else
 	contentTracker()
 
 async function contentTracker() {
-	console.info(chalk.blue("Scanning folders"))
+	logger.verbose("Scanning folders")
 	let fileList = Tracker.rList(config.settings.files.dir, config.settings.files.rules)
-	console.info(chalk.blue("Found " + fileList.dirs.length +" folders & " + fileList.files.length + " files "))
+	logger.verbose("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
 	if(fileList.dirs.length > 0) {
 		// only bother doing this if we found any files
 
 		// airtable excitement proceeds
-		console.info(chalk.blue("Fetching folder list from AirTable"))
-		let foldersList = await Tracker.airtableToArray(foldersView)
-		let filesList = await Tracker.airtableToArray(filesView)
+		logger.verbose("Fetching folder list from AirTable")
+		
+		let foldersList, filesList = []
+		
+		try {
+			foldersList = await Tracker.airtableToArray(foldersView)
+			filesList = await Tracker.airtableToArray(filesView)
+		}
+		catch(err) {
+			logger.warn("Failed to fetch folder list")
+			logger.error(err)
+			return
+		}
 
-		console.info(chalk.blue("Consoling the differences between the local folders and AirTable"))
-		const folderDiffs = Tracker.checkDiffs(fileList.dirs,foldersList)
-		console.info(chalk.green(folderDiffs.inserts.length) + " folders to be added")
-		console.info(chalk.yellow(folderDiffs.updates.length) + " folders to be modified")
-		console.info(chalk.magenta(folderDiffs.deletes.length) + " folders to be deleted")
+		logger.verbose("Consoling the differences between the local folders and AirTable")
+		const folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList)
+		logDiffs("Folders", folderDiffs)
 
-		console.info(chalk.blue("Consoling the differences between the local files and AirTable"))
-		const fileDiffs = Tracker.checkDiffs(fileList.files,filesList)
-		console.info(chalk.green(fileDiffs.inserts.length) + " files to be added")
-		console.info(chalk.yellow(fileDiffs.updates.length) + " files to be modified")
-		console.info(chalk.magenta(fileDiffs.deletes.length) + " files to be deleted")
+		logger.verbose("Consoling the differences between the local files and AirTable")
+		const fileDiffs = Tracker.checkDiffs(fileList.files, filesList)
+		logDiffs("Files", fileDiffs)
 
 		if(!options.dryRun) {
-			console.info(chalk.blue("Updating AirTable"))
-			Tracker.updateAT(folderDiffs, foldersTable)
-			Tracker.updateAT(fileDiffs, filesTable)
+			logger.verbose("Updating AirTable")
+			try {
+				Tracker.updateAT(folderDiffs, foldersTable, "Folders", logUpdates)
+				Tracker.updateAT(fileDiffs, filesTable, "Files", logUpdates)
+			}
+			catch (err) {
+				logger.warn("Issue updating AirTable")
+				logger.error(err)
+			}
 		}
 		else {
-			console.info(chalk.bgBlue("[DRY RUN] -  Folders:"))
-			console.info(folderDiffs)
+			logger.debug("[DRY RUN] -  Folders:")
+			logger.verbose(folderDiffs)
 
-			console.info(chalk.bgBlue("[DRY RUN] -  Files:"))
-			console.info(fileDiffs)
+			logger.debug(chalk.bgBlue("[DRY RUN] -  Files:"))
+			logger.verbose(fileDiffs)
 		}
+	}
+}
+
+function logDiffs(tableName, diffs) {
+	logger.info("AT %s Table: %d to add, %d to update & %d to delete", tableName, diffs.inserts.length, diffs.updates.length, diffs.deletes.length)
+}
+
+function logUpdates(tableName, err, res) {
+	logger.info("AT %s Table: %d added, %d updated & %d deleted", tableName, res.inserts.length, res.updates.length, res.deletes)
+
+	res.inserts.forEach(insert => logger.verbose("Inserted %s", insert))
+	res.updates.forEach(update => logger.verbose("Updated %s", update))
+	if(err) {
+		logger.warn("Error updating %s table", table)
+		logger.error(err)
 	}
 }

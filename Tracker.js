@@ -1,6 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import _ from 'lodash'
+import { logger } from './logger.js'
 
 import chalk from 'chalk' // TODO: remove all logging from here...
 
@@ -52,7 +53,7 @@ export function rList(dir, rules) {
 			}
 		}
 		catch (err) {
-			console.warn(chalk.yellow("Failed to read " + file))
+			logger.warn("Failed to read %s", file)
 		}
 	})
 
@@ -106,18 +107,16 @@ export function deserialiseREArray(exps) {
  * @returns {array} array of objects
  */
 export async function airtableToArray(view) {
-	/* get all rows */
-	const result = await view.all()
+	// get all rows
+	const rows = await view.all()
 
-	/* pull raw objects from the result */
-	const arr = result.map(r => {
+	// return the id and fields from the fetched rows
+	return rows.map(r => {
 		return {
 			id: r.id,
 			fields: r.fields
 		}
-	});
-
-	return arr;
+	})
 }
 
 /**
@@ -157,42 +156,60 @@ export function checkDiffs(locals,webs) {
  * @param {object} diffs object containing the .inserts, .updates & .deletes (from checkDiffs())
  * @param {object} table AirTable table object to update
  */
-export function updateAT(diffs, table) {
+export async function updateAT(diffs, table, tableName, callback) {
+	// store all the promises
+	let proms = {
+		inserts: [],
+		updates: [],
+		deletes: []
+	}
+
+	let result = {
+		inserts: [],
+		updates: [],
+		deletes: 0
+	}
+
+	let error = ""
+
+	const completed = (err, records) => {
+		console.log("Completed")
+		if (err) {
+			result.error += err + "\n"
+			return
+		}
+		records.forEach(record => result.inserts.push(record.get('_path')))
+	}
+
 	// inserts
 	for (let i = 0; i < diffs.inserts.length; i+=10) {
 		// insert in blocks of 10
-		table.create(diffs.inserts.slice(i, i+10).map(r => {return {fields: r}}), (err, records) => {
-			if (err) {
-				console.error(err)
-				return;
-			}
-			records.forEach(record => {
-				console.log(chalk.green("Inserted " + record.get('_path')))
-			});
-		})
+		proms.inserts.push(table.create(diffs.inserts.slice(i, i+10).map(r => {return {fields: r}})).then(records => {
+			records.forEach(record => result.inserts.push(record.get('_path')))
+		}))
 	}
 	
 	for (let i = 0; i < diffs.updates.length; i+=10) {
 		// update in blocks of 10
-		table.update(diffs.updates.slice(i, i+10), (err, records) => {
-			if (err) {
-				console.error(err)
-				return
-			}
-			records.forEach(record => {
-				console.log(chalk.yellow("Updated " + record.get('_path')))
-			})
-		})
+		proms.updates.push(table.update(diffs.updates.slice(i, i+10)).then(records => {
+			records.forEach(record => result.updates.push(record.get('_path')))
+		}))
 	}
 
 	for (let i = 0; i < diffs.deletes.length; i+=10) {
 		// delete in blocks of 10
-		table.destroy(diffs.deletes.slice(i, i+10).map(r => r.id), (err, records) => {
-			if (err) {
-				console.error(err)
-				return
-			}
-			console.log(chalk.magenta("Deleted " + records.length + " records"))
-		})
+		proms.deletes.push(table.destroy(diffs.deletes.slice(i, i+10).map(r => r.id)).then((records) => {
+			result.deletes += records.length
+		}))
 	}
+
+	// if anything fails add it to the communal error
+	Promise.all([...proms.inserts, ...proms.updates, ...proms.deletes]).catch(err => {
+		if (err) {
+			error += err + "\n"
+		}
+	})
+	
+	// wait for it to finish everything
+	Promise.allSettled([...proms.inserts, ...proms.updates, ...proms.deletes]).then(r => callback(tableName, error, result))
 }
