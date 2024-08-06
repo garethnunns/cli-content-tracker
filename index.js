@@ -139,7 +139,7 @@ else
 async function contentTracker() {
 	logger.verbose("Scanning folders")
 	let fileList = Tracker.rList(config.settings.files.dir, config.settings.files.rules)
-	logger.verbose("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
+	logger.info("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
 	if(fileList.dirs.length > 0) {
 		// only bother doing this if we found any files
@@ -198,7 +198,7 @@ function logUpdates(tableName, err, res) {
 	res.inserts.forEach(insert => logger.verbose("Inserted %s", insert))
 	res.updates.forEach(update => logger.verbose("Updated %s", update))
 	if(err) {
-		logger.warn("Error updating %s table", table)
+		logger.warn("Error updating %s table", tableName)
 		logger.error(err)
 	}
 }
