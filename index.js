@@ -19,6 +19,7 @@ program
 	.option('-c, --config <path>', 'config file path (if none specified template will be created)')
 	.option('-d, --dry-run','will do everything apart from updating AirTable')
 	.option('-l, --logging <level>','Set the logging level')
+	.option('-w, --wipe-cache', 'clear the metadata cache')
 	.parse(process.argv);
 
 const options = program.opts()
@@ -76,6 +77,10 @@ if(!options.config) {
 		logger.error("[%s] %s", err.name, err.message)
 		exit(1)
 	}
+}
+
+if(options.clearCache) {
+	Tracker.clearCache()
 }
 
 let config

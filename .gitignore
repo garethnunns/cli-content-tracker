@@ -1,5 +1,7 @@
 config*.json
 
+.db/
+
 # Logs
 logs
 *.log

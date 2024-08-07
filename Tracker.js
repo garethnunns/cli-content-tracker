@@ -3,7 +3,8 @@ import * as path from 'path'
 import _ from 'lodash'
 import { logger } from './logger.js' // TODO: remove all logging from here...
 
-import { Metadata, MetadataFolder, MetadataFileMedia, MetadataFile } from './Metadata.js'
+import { Level } from 'level'
+const db = new Level('./.db', { valueEncoding: 'json' })
 
 import * as ffmpegStatic from 'ffmpeg-static'
 import * as ffprobeStatic from 'ffprobe-static'
@@ -12,6 +13,8 @@ import FfmpegCommand from 'fluent-ffmpeg'
 FfmpegCommand.setFfmpegPath(ffmpegStatic.path);
 FfmpegCommand.setFfprobePath(ffprobeStatic.path)
 FfmpegCommand.setFfmpegPath(ffmpegStatic)
+
+import { Metadata, MetadataFolder, MetadataFileMedia, MetadataFile } from './Metadata.js'
 
 const metadataFolder = new MetadataFolder()
 const metadataFile = new MetadataFile()
@@ -99,14 +102,26 @@ export async function rList(dir, rules, metadata = false) {
  */
 function getFileMetadata(fileMeta) {
 	return new Promise((resolve, reject) => {
-		FfmpegCommand.ffprobe(fileMeta.path, (err, metadata) => {
+		FfmpegCommand.ffprobe(fileMeta.path, async (err, metadata) => {
 			if(err)
 				reject(err)
 
 			let mediaMeta = new MetadataFileMedia(fileMeta.all)
 
-			logger.debug("Fetching metadata for %s", mediaMeta.path)
-			// TODO: add in checking a cache to see if we've already looked this one up
+			let cacheMeta
+			try{
+				cacheMeta = await db.get(fileMeta.path)
+			}
+			catch(err) {
+				logger.debug("Fetching metadata for %s", mediaMeta.path)
+			}
+
+			if(cacheMeta !== undefined) {
+				logger.debug("Retreived cached metadata for %s", mediaMeta.path)
+				// found the item in cache
+				mediaMeta.all = cacheMeta
+				resolve(mediaMeta)
+			}
 			
 			const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
 			const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
@@ -133,6 +148,8 @@ function getFileMetadata(fileMeta) {
 			mediaMeta.audioSampleRate = audioStream?.sample_rate ?? 0,
 			mediaMeta.audioChannels = audioStream?.channels ?? 0,
 			mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
+
+			db.put(mediaMeta.path, mediaMeta.all)
 			
 			resolve(mediaMeta)
 		})
@@ -166,6 +183,13 @@ export function isAllowed(file, rules) {
 	})
 
 	return allowed
+}
+
+/**
+ * Wipe any of the existing metadata cache
+ */
+export function clearCache() {
+	db.clear()
 }
 
 /**
