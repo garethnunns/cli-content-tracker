@@ -106,7 +106,7 @@ catch(err) {
 	exit(3)
 }
 
-logger.debug("Attempting AirTable connection")
+logger.http("Attempting AirTable connection")
 
 let base, foldersTable, foldersView, filesTable, filesView
 try {
@@ -140,7 +140,7 @@ else
 
 async function contentTracker() {
 	logger.http("Scanning folders")
-	let fileList = await Tracker.rList(config.settings.files.dir, config.settings.files.rules, true)
+	let fileList = await Tracker.rList(config.settings.files.dir, config.settings.files.rules, config.settings.files.mediaMetadata)
 	logger.info("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
 	if(fileList.dirs.length > 0) {
