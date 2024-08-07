@@ -8,14 +8,14 @@ const color = {
   warn: "\x1b[43m", // yellow bg
   info: "\x1b[32m", // green
   http: "\x1b[35m", // magenta
-  verbose: "\x1b[34m", // blue
-  debug: "\x1b[44m", // blue bg
+  verbose: "\x1b[44m", // blue
+  debug: "\x1b[34m", // blue bg
   silly: "\x1b[37m" // white
 }
 
 export const logger = winston.createLogger({
   transports: [new winston.transports.Console({
-		level: 'debug',
+		level: 'http',
 		format: combine(
 			splat(),
 			timestamp({

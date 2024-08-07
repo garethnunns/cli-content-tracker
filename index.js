@@ -16,14 +16,18 @@ const program = new Command()
 program
 	.version(pjson.version)
 	.description(pjson.description)
-	.option('-c, --config <path>', 'Config file path (if none specified template will be created)')
-	.option('-d, --dry-run','Will do everything apart from updating AirTable')
+	.option('-c, --config <path>', 'config file path (if none specified template will be created)')
+	.option('-d, --dry-run','will do everything apart from updating AirTable')
+	.option('-l, --logging <level>','Set the logging level')
 	.parse(process.argv);
 
 const options = program.opts()
 
 // this bit is really important, don't remove
 console.log(chalk.magenta(figlet.textSync("Content Tracker")))
+
+if(options.logging && options.logging in logger.levels)
+	logger.transports[0].level = options.logging
 
 if(!options.config) {
 	// no config file specified
@@ -45,7 +49,8 @@ if(!options.config) {
 							/\.DS_Store$/
 						]
 					}
-				}
+				},
+				mediaMetadata: true
 			},
 			airtable: {
 				api: '',
@@ -68,7 +73,7 @@ if(!options.config) {
 	}
 	catch (err) {
 		logger.warn("Failed to create template config file")
-		logger.error(err)
+		logger.error("[%s] %s", err.name, err.message)
 		exit(1)
 	}
 }
@@ -81,14 +86,11 @@ try {
 }
 catch (err) {
 	logger.warn("Failed to load config file")
-	logger.error(err)
+	logger.error("[%s] %s", err.name, err.message)
 	exit(2)
 }
 
-// TODO: find a better way of validating the whole config file
-// if they have been deleted for whatever reason add them back as empty arrays
-//config.settings.files.includes = config?.settings?.files?.includes ?? []
-//config.settings.files.excludes = config?.settings?.files?.excludes ?? []
+// TODO: find a better way of validating the whole config file - use a config module
 
 // convert JSON stringified regex into proper regex
 for(let type in config.settings.files.rules)
@@ -100,11 +102,11 @@ try {
 }
 catch(err) {
 	logger.warn('Could not access the folder "%s"', config.settings.files.dir)
-	logger.error(err)
+	logger.error("[%s] %s", err.name, err.message)
 	exit(3)
 }
 
-logger.verbose("Attempting AirTable connection")
+logger.debug("Attempting AirTable connection")
 
 let base, foldersTable, foldersView, filesTable, filesView
 try {
@@ -119,12 +121,12 @@ try {
 	filesTable = base(config.settings.airtable.filesID)
 	filesView = filesTable.select({
 		view: config.settings.airtable.view,
-		fields: Tracker.fileFields
+		fields: config.settings.files.mediaMetadata ?  Tracker.fileMediaFields : Tracker.fileFields
 	})
 }
 catch (err) {
 	logger.error("Failed to make AirTable Connection")
-	logger.error(err)
+	logger.error("[%s] %s", err.name, err.message)
 	exit(4)
 }
 
@@ -137,52 +139,63 @@ else
 	contentTracker()
 
 async function contentTracker() {
-	logger.verbose("Scanning folders")
-	let fileList = Tracker.rList(config.settings.files.dir, config.settings.files.rules)
+	logger.http("Scanning folders")
+	let fileList = await Tracker.rList(config.settings.files.dir, config.settings.files.rules, true)
 	logger.info("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
 	if(fileList.dirs.length > 0) {
 		// only bother doing this if we found any files
 
 		// airtable excitement proceeds
-		logger.verbose("Fetching folder list from AirTable")
+		logger.http("Fetching folder list from AirTable")
 		
 		let foldersList, filesList = []
 		
 		try {
-			foldersList = await Tracker.airtableToArray(foldersView)
-			filesList = await Tracker.airtableToArray(filesView)
+			foldersList = await Tracker.airtableToArray(foldersView, Tracker.dirDefaults)
+			const fileDefaults = config.settings.files.mediaMetadata ? Tracker.fileMediaDefaults : Tracker.fileDefaults
+			filesList = await Tracker.airtableToArray(filesView, fileDefaults)
+
+			logger.silly(filesList)
 		}
 		catch(err) {
 			logger.warn("Failed to fetch folder list")
-			logger.error(err)
+			logger.error("[%s] %s", err.name, err.message)
 			return
 		}
 
-		logger.verbose("Consoling the differences between the local folders and AirTable")
+		logger.http("Consoling the differences between the local folders and AirTable")
 		const folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList)
 		logDiffs("Folders", folderDiffs)
 
-		logger.verbose("Consoling the differences between the local files and AirTable")
+		logger.http("Consoling the differences between the local files and AirTable")
 		const fileDiffs = Tracker.checkDiffs(fileList.files, filesList)
 		logDiffs("Files", fileDiffs)
 
 		if(!options.dryRun) {
-			logger.verbose("Updating AirTable")
+			logger.http("Updating AirTable")
 			try {
 				Tracker.updateAT(folderDiffs, foldersTable, "Folders", logUpdates)
 				Tracker.updateAT(fileDiffs, filesTable, "Files", logUpdates)
 			}
 			catch (err) {
 				logger.warn("Issue updating AirTable")
-				logger.error(err)
+				logger.error("[%s] %s", err.name, err.message)
 			}
 		}
 		else {
-			logger.debug("[DRY RUN] -  Folders:")
+			let totalChanges = Object.values(folderDiffs).reduce(
+				(total, changes) => total + changes.length,
+				0
+			)
+			logger.info("[DRY RUN] -  %d Folder Changes", totalChanges)
 			logger.verbose(folderDiffs)
 
-			logger.debug(chalk.bgBlue("[DRY RUN] -  Files:"))
+			totalChanges = Object.values(fileDiffs).reduce(
+				(total, changes) => total + changes.length,
+				0
+			)
+			logger.info("[DRY RUN] -  %d File Changes", totalChanges)
 			logger.verbose(fileDiffs)
 		}
 	}
@@ -190,13 +203,19 @@ async function contentTracker() {
 
 function logDiffs(tableName, diffs) {
 	logger.info("AT %s Table: %d to add, %d to update & %d to delete", tableName, diffs.inserts.length, diffs.updates.length, diffs.deletes.length)
+	logger.silly("Inserts:")
+	logger.silly(diffs.inserts)
+	logger.silly("Updates:")
+	logger.silly(diffs.updates)
+	logger.silly("Deletes:")
+	logger.silly(diffs.deletes)
 }
 
 function logUpdates(tableName, err, res) {
 	logger.info("AT %s Table: %d added, %d updated & %d deleted", tableName, res.inserts.length, res.updates.length, res.deletes)
 
-	res.inserts.forEach(insert => logger.verbose("Inserted %s", insert))
-	res.updates.forEach(update => logger.verbose("Updated %s", update))
+	res.inserts.forEach(insert => logger.debug("Inserted %s", insert))
+	res.updates.forEach(update => logger.debug("Updated %s", update))
 	if(err) {
 		logger.warn("Error updating %s table", tableName)
 		logger.error(err)

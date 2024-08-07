@@ -1,63 +1,142 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import _ from 'lodash'
-import { logger } from './logger.js'
+import { logger } from './logger.js' // TODO: remove all logging from here...
 
-import chalk from 'chalk' // TODO: remove all logging from here...
+import { Metadata, MetadataFolder, MetadataFileMedia, MetadataFile } from './Metadata.js'
 
-export const dirFields = ["_path", "_size", "_ctime", "_mtime", "_items"]
-export const fileFields = ["_path", "_size", "_ctime", "_mtime"]
+import * as ffmpegStatic from 'ffmpeg-static'
+import * as ffprobeStatic from 'ffprobe-static'
+import FfmpegCommand from 'fluent-ffmpeg'
+
+FfmpegCommand.setFfmpegPath(ffmpegStatic.path);
+FfmpegCommand.setFfprobePath(ffprobeStatic.path)
+FfmpegCommand.setFfmpegPath(ffmpegStatic)
+
+const metadataFolder = new MetadataFolder()
+const metadataFile = new MetadataFile()
+const metadataFileMedia = new MetadataFileMedia()
+
+export const dirFields = metadataFolder.keys
+export const fileFields = metadataFile.keys
+export const fileMediaFields = metadataFileMedia.keys
+
+export const dirDefaults = metadataFolder.fields
+export const fileDefaults = metadataFile.fields
+export const fileMediaDefaults = metadataFileMedia.fields
 
 /**
  * Recursively get all the contained files and folders for the given dir
  * @param {string} dir 
  * @param {object} includes object containing the rules for including and excluding dirs/files
+ * @param {boolean} metadata whether to get all the file metadata
  * @returns object containing the arrays of objects .dirs & .files
  */
-export function rList(dir, rules) {
+export async function rList(dir, rules, metadata = false) {
 	let result = {
 		dirs: [],
 		files: []
 	}
 	const list = fs.readdirSync(dir)
 
-	list.forEach(file => {
+	await Promise.all(list.map(async (file) => {
 		// full file/folder path
 		file = path.join(dir, file)
 
 		try {
 			const stat = fs.statSync(file)
-			const fileStat = {
-				_path: file,
-				_size: stat.size,
-				_ctime: stat.ctime.toISOString(),
-				_mtime: stat.mtime.toISOString()
-			}
+
+			const pathMeta = new Metadata({
+				path: file,
+				size: stat.size,
+				ctime: stat.ctime.toISOString(),
+				mtime: stat.mtime.toISOString()
+			})
 
 			if (stat.isDirectory()) {
 				if(isAllowed(file, rules.dirs)) {
-					fileStat._items = fs.readdirSync(file).length
-					result.dirs.push(fileStat)
+					let folderMeta = new MetadataFolder(pathMeta.all)
+					folderMeta.items = fs.readdirSync(file).length
+					result.dirs.push(folderMeta.fields)
 				}
 
 				// get everything within that folder
-				const subFiles = rList(file, rules)
+				const subFiles = await rList(file, rules, metadata)
 
 				result.dirs = result.dirs.concat(subFiles.dirs)
 				result.files = result.files.concat(subFiles.files)
 			}
 			else {
 				// it's a file
-				if(isAllowed(file, rules.files))
-					result.files.push(fileStat)
+				if(isAllowed(file, rules.files)) {
+					let fileMeta = new MetadataFile(pathMeta.all)
+
+					if(metadata)
+						fileMeta = await getFileMetadata(fileMeta)
+							.catch(err => {
+								logger.warn("Issue getting metadata for %s", file)
+								logger.error("[%s] %s", err.name, err.message)
+								fileMeta = new MetadataFileMedia(pathMeta.all)
+							})
+					
+					result.files.push(fileMeta.fields)
+				}
 			}
 		}
 		catch (err) {
 			logger.warn("Failed to read %s", file)
+			logger.error("[%s] %s", err.name, err.message)
 		}
-	})
+	}))
 
 	return result
+}
+
+/**
+ * Get all the metadata for a file using 
+ * @param {MetadataFile} fileMeta MetadataFile object containing a path to the item
+ * @returns {Promise} resolve contains Metadata object
+ */
+function getFileMetadata(fileMeta) {
+	return new Promise((resolve, reject) => {
+		FfmpegCommand.ffprobe(fileMeta.path, (err, metadata) => {
+			if(err)
+				reject(err)
+
+			let mediaMeta = new MetadataFileMedia(fileMeta.all)
+
+			logger.debug("Fetching metadata for %s", mediaMeta.path)
+			// TODO: add in checking a cache to see if we've already looked this one up
+			
+			const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
+			const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
+	
+			mediaMeta.video = videoStream !== undefined
+			mediaMeta.videoStill = metadata?.format.format_long_name.includes("sequence") ?? false
+			
+			const duration = metadata?.format.duration ?? 0
+			mediaMeta.duration = duration != 'N/A' ? duration : 0
+			
+			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
+			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
+			mediaMeta.videoWidth = videoStream?.width ?? 0
+			mediaMeta.videoHeight = videoStream?.height ?? 0
+			mediaMeta.videoFormat = videoStream?.pix_fmt ?? ''
+
+			// TODO: need to cross-reference list of possible alpha pixel formats...
+			mediaMeta.videoAlpha = videoStream?.pix_fmt.includes('a') ?? false
+			mediaMeta.videoFPS = mediaMeta.videoStill ? 0 : mediaMeta.video ? Number(videoStream.r_frame_rate.split('/')[0]) : 0
+			mediaMeta.videoBitRate = mediaMeta.video ? (videoStream.bit_rate != 'N/A' ? videoStream.bit_rate : 0) : 0
+
+			mediaMeta.audio = audioStream !== undefined
+			mediaMeta.audioCodec = audioStream?.codec_name ?? '',
+			mediaMeta.audioSampleRate = audioStream?.sample_rate ?? 0,
+			mediaMeta.audioChannels = audioStream?.channels ?? 0,
+			mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
+			
+			resolve(mediaMeta)
+		})
+	})
 }
 
 /**
@@ -104,9 +183,10 @@ export function deserialiseREArray(exps) {
 /**
  * Create array of objects from Airtable view
  * @param {object} view AirTable view containing the fields & records to be returned
+ * @param {object} defaults provide if you want to fill empty values
  * @returns {array} array of objects
  */
-export async function airtableToArray(view) {
+export async function airtableToArray(view, defaults = {}) {
 	// get all rows
 	const rows = await view.all()
 
@@ -114,7 +194,7 @@ export async function airtableToArray(view) {
 	return rows.map(r => {
 		return {
 			id: r.id,
-			fields: r.fields
+			fields: {...defaults, ...r.fields}
 		}
 	})
 }
@@ -171,15 +251,6 @@ export async function updateAT(diffs, table, tableName, callback) {
 	}
 
 	let error = ""
-
-	const completed = (err, records) => {
-		console.log("Completed")
-		if (err) {
-			result.error += err + "\n"
-			return
-		}
-		records.forEach(record => result.inserts.push(record.get('_path')))
-	}
 
 	// inserts
 	for (let i = 0; i < diffs.inserts.length; i+=10) {
