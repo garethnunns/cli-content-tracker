@@ -116,9 +116,12 @@ function getFileMetadata(fileMeta) {
 				logger.debug("Fetching metadata for %s", mediaMeta.path)
 			}
 
-			if(cacheMeta !== undefined) {
+			if(cacheMeta !== undefined 
+				&& cacheMeta.size == mediaMeta.size 
+				&& cacheMeta.mtime == mediaMeta.mtime) {
+				// found the item in cache and it matches the size and last modified time
+				
 				logger.debug("Retreived cached metadata for %s", mediaMeta.path)
-				// found the item in cache
 				mediaMeta.all = cacheMeta
 				resolve(mediaMeta)
 			}
