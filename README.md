@@ -123,7 +123,9 @@ Create the default config as [described above](#config-option--c---config-), whi
 {
   "settings": {
     "files": {
-      "dir": "~/",
+      "dirs": [
+        "~/"
+      ],
       "frequency": 30,
       "rules": {
         "dirs": {
@@ -157,11 +159,11 @@ In general, leave all the parameters in the JSON file, there is some error handl
 
 This section relates to all the local file scanning. The script in general builds up a list of all the files and folders and here you get a bit of control over that.
 
-#### config.settings.files.dir
+#### config.settings.files.dirs
 
-The directory to recursively search through, _e.g._
+Array of irectory to recursively search through, _e.g._
 ```json
-"dir": "/Volumes/Suite/"
+"dirs": [ "/Volumes/Suite/", "/Volumes/remote/" ]
 ```
 
 #### config.settings.files.frequency

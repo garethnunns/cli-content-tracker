@@ -37,7 +37,9 @@ if(!options.config) {
 	const defaults = {
 		settings: {
 			files: {
-				dir: import.meta.dirname,
+				dirs: [
+					import.meta.dirname
+				],
 				frequency: 30,
 				rules: {
 					dirs: {
@@ -104,14 +106,16 @@ for(let type in config.settings.files.rules)
 	for(let rule in config.settings.files.rules[type])
 		config.settings.files.rules[type][rule] = Tracker.deserialiseREArray(config.settings.files.rules[type][rule])
 
-try {
-	fs.readdirSync(config.settings.files.dir)
-}
-catch(err) {
-	logger.warn('Could not access the folder "%s"', config.settings.files.dir)
-	logger.error("[%s] %s", err.name, err.message)
-	exit(3)
-}
+config.settings.files.dirs.forEach(dir => {
+	try {
+		fs.readdirSync(dir)
+	}
+	catch(err) {
+		logger.warn('Could not access the folder "%s"', dir)
+		logger.error("[%s] %s", err.name, err.message)
+		exit(3)
+	}
+})
 
 logger.http("Attempting AirTable connection")
 
@@ -137,17 +141,11 @@ catch (err) {
 	exit(4)
 }
 
-if(config.settings.files.frequency > 0) {
-	contentTracker()
-	setInterval(contentTracker, config.settings.files.frequency * 1000)
-}
-else 
-	// only run it once if the frequency is 0
-	contentTracker()
+contentTracker()
 
 async function contentTracker() {
 	logger.verbose("Scanning folders")
-	let fileList = await Tracker.rList(config.settings.files.dir, {
+	let fileList = await Tracker.rLists(config.settings.files.dirs, {
 		rules: config.settings.files.rules,
 		mediaMetadata: config.settings.files.mediaMetadata,
 		limitToFirstFile: config.settings.files.limitToFirstFile
@@ -192,6 +190,11 @@ async function contentTracker() {
 				logger.error("[%s] %s", err.name, err.message)
 			}
 		}
+	}
+
+	if(config.settings.files.frequency > 0) {
+		console.debug("Waiting...")
+		setTimeout(contentTracker, config.settings.files.frequency * 1000)
 	}
 }
 

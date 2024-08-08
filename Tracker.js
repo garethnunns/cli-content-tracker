@@ -44,6 +44,27 @@ const defaultRListOptions = {
 }
 
 /**
+ * Get the contents of all the dirs recursively
+ * @param {array} dirs array of folder path
+ * @param {object} options rules, mediaMetadata & limitToFirstFile
+ * @returns object containing the arrays of MetadataFolder & MetadataFile(Media)
+ */
+export async function rLists(dirs, options = defaultRListOptions) {
+	let result = {
+		dirs: [],
+		files: []
+	}
+
+	await Promise.all(dirs.map(async dir => {
+		const fileList = await rList(dir, options)
+		result.dirs.push(...fileList.dirs)
+		result.files.push(...fileList.files)
+	}))
+
+	return result
+}
+
+/**
  * Recursively get all the contained files and folders for the given dir
  * @param {string} dir 
  * @param {object} object rules, mediaMetadata & limitToFirstFile
