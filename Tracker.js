@@ -184,7 +184,7 @@ function getFileMetadata(fileMeta) {
 			mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
 
 			try {
-				db.put(mediaMeta.path, mediaMeta.all)
+				await db.put(mediaMeta.path, mediaMeta.all)
 			}
 			catch(err) {
 				logger.warn("Failed to store cache for %s", mediaMeta.path)
@@ -228,7 +228,7 @@ export function isAllowed(file, rules) {
 /**
  * Wipe any of the existing metadata cache
  */
-export function clearCache() {
+export function wipeCache() {
 	db.clear()
 }
 
@@ -274,9 +274,6 @@ export function checkDiffs(locals, webs, folderList = []) {
 	// clone these as we are going to edit their contents
 	locals = _.cloneDeep(locals)
 	webs = _.cloneDeep(webs)
-
-	console.log(locals)
-	console.log(webs)
 
 	let result = { updates: [] }
 

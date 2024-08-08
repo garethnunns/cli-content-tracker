@@ -80,8 +80,9 @@ if(!options.config) {
 	}
 }
 
-if(options.clearCache) {
-	Tracker.clearCache()
+if(options.wipeCache) {
+	logger.warn("Wiping cache")
+	Tracker.wipeCache()
 }
 
 let config
