@@ -94,7 +94,7 @@ export async function rList(dir, options = defaultRListOptions) {
 					
 					let fileMeta = new MetadataFile(pathMeta.all)
 
-					if(options.metadata)
+					if(options.mediaMetadata)
 						fileMeta = await getFileMetadata(fileMeta)
 							.catch(err => {
 								logger.warn("Issue getting metadata for %s", file)
@@ -157,8 +157,12 @@ function getFileMetadata(fileMeta) {
 			mediaMeta.video = videoStream !== undefined
 			mediaMeta.videoStill = metadata?.format.format_long_name.includes("sequence") ?? false
 			
-			const duration = metadata?.format.duration ?? 0
-			mediaMeta.duration = duration != 'N/A' & !mediaMeta.videoStill ? duration : 0
+			// see if it's there
+			let duration = metadata?.format.duration ?? 0
+			// if it's a still or irrelevant set it to 0
+			duration = (duration != 'N/A') || !mediaMeta.videoStill ? duration : 0
+			// round to it 2dp
+			mediaMeta.duration = Math.round(duration * 100) / 100
 			
 			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
 			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
@@ -170,7 +174,7 @@ function getFileMetadata(fileMeta) {
 			mediaMeta.videoAlpha = videoStream?.pix_fmt.includes('a') ?? false
 
 			let FPS = videoStream?.r_frame_rate.split('/')[0] / videoStream?.r_frame_rate.split('/')[1]
-			mediaMeta.videoFPS = FPS || !mediaMeta.videoStill ? Math.round(FPS * 100) / 100 : 0
+			mediaMeta.videoFPS = (FPS || !mediaMeta.videoStill) ? Math.round(FPS * 100) / 100 : 0
 			mediaMeta.videoBitRate = mediaMeta.video ? (videoStream.bit_rate != 'N/A' ? videoStream.bit_rate : 0) : 0
 
 			mediaMeta.audio = audioStream !== undefined
@@ -264,6 +268,9 @@ export function checkDiffs(locals, webs, folderList = []) {
 	// clone these as we are going to edit their contents
 	locals = _.cloneDeep(locals)
 	webs = _.cloneDeep(webs)
+
+	console.log(locals)
+	console.log(webs)
 
 	let result = { updates: [] }
 
