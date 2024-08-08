@@ -25,7 +25,7 @@ program
 const options = program.opts()
 
 // this bit is really important, don't remove
-console.log(chalk.magenta(figlet.textSync("Content Tracker")))
+console.log(chalk.cyanBright(figlet.textSync("Content Tracker")))
 
 if(options.logging && options.logging in logger.levels)
 	logger.transports[0].level = options.logging
@@ -51,7 +51,8 @@ if(!options.config) {
 						]
 					}
 				},
-				mediaMetadata: true
+				mediaMetadata: true,
+				limitToFirstFile: false
 			},
 			airtable: {
 				api: '',
@@ -144,7 +145,7 @@ else
 	contentTracker()
 
 async function contentTracker() {
-	logger.http("Scanning folders")
+	logger.verbose("Scanning folders")
 	let fileList = await Tracker.rList(config.settings.files.dir, config.settings.files.rules, config.settings.files.mediaMetadata)
 	logger.info("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
@@ -164,18 +165,18 @@ async function contentTracker() {
 			logger.silly(filesList)
 		}
 		catch(err) {
-			logger.warn("Failed to fetch folder list")
+			logger.warn("Failed to fetch file/folder list")
 			logger.error("[%s] %s", err.name, err.message)
 			return
 		}
 
-		logger.http("Consoling the differences between the local folders and AirTable")
+		logger.verbose("Consoling the differences between the local folders and AirTable")
 		const folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList, foldersList)
-		logDiffs("Folders", folderDiffs)
+		logDiffs("folders", folderDiffs, options.dryRun)
 
-		logger.http("Consoling the differences between the local files and AirTable")
+		logger.verbose("Consoling the differences between the local files and AirTable")
 		const fileDiffs = Tracker.checkDiffs(fileList.files, filesList, foldersList)
-		logDiffs("Files", fileDiffs)
+		logDiffs("files", fileDiffs, options.dryRun)
 
 		if(!options.dryRun) {
 			logger.http("Updating AirTable")
@@ -188,32 +189,26 @@ async function contentTracker() {
 				logger.error("[%s] %s", err.name, err.message)
 			}
 		}
-		else {
-			let totalChanges = Object.values(folderDiffs).reduce(
-				(total, changes) => total + changes.length,
-				0
-			)
-			logger.info("[DRY RUN] -  %d Folder Changes", totalChanges)
-			logger.verbose(folderDiffs)
-
-			totalChanges = Object.values(fileDiffs).reduce(
-				(total, changes) => total + changes.length,
-				0
-			)
-			logger.info("[DRY RUN] -  %d File Changes", totalChanges)
-			logger.verbose(fileDiffs)
-		}
 	}
 }
 
-function logDiffs(tableName, diffs) {
-	logger.info("AT %s Table: %d to add, %d to update & %d to delete", tableName, diffs.inserts.length, diffs.updates.length, diffs.deletes.length)
-	logger.silly("Inserts:")
-	logger.silly(diffs.inserts)
-	logger.silly("Updates:")
-	logger.silly(diffs.updates)
-	logger.silly("Deletes:")
-	logger.silly(diffs.deletes)
+function logDiffs(tableName, diffs, dry = false) {
+	let totalChanges = Object.values(diffs).reduce(
+		(total, changes) => total + changes.length,
+		0
+	)
+
+	let pre = (dry ? "[DRY RUN] - " : "")
+
+	logger.info(pre + "AT %s table - %d changes", tableName, totalChanges)
+	
+	pre += "%d %s to %s"
+
+	for(const changes in diffs) {
+		logger.verbose(pre, diffs[changes].length, tableName, changes.slice(0, -1))
+		if(diffs[changes].length)
+			logger.debug(diffs[changes].map(el => el?.fields?._path ?? el._path))
+	}
 }
 
 function logUpdates(tableName, err, res) {
