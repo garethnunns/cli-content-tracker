@@ -22,7 +22,7 @@ You can duplicate [this base](https://airtable.com/appPF3qIAsOaGMz9z/shr6Hx4YgXr
 
 ### Manual Base Creation
 
-You'll need a base with the two following tables for folders & files are required.
+You'll need a base with the two following tables for folders & files.
 
 #### Folders Table
 
@@ -33,8 +33,11 @@ You'll need a base with the two following tables for folders & files are require
 | `_ctime`    | Creation time of the folder                 | Date - include time, **Use same time for all collaborators**
 | `_mtime`    | Last modified time of the folder            | Date - include time, **Use same time for all collaborators**
 | `_items`    | Number of items in the folder               | Number - 0 decimal places
+| `_parent`   | Parent folder of this folder                | Link to record - this table
 
 #### Files Table
+
+Only use this smaller table when the [mediaMetadata setting](#configsettingsfilesmediametadata) is disabled.
 
 | Field       | Description                                 | Type
 | ---         | ---                                         | ---
@@ -42,8 +45,30 @@ You'll need a base with the two following tables for folders & files are require
 | `_size`     | Size of the file in bytes                   | Number - 0 decimal places
 | `_ctime`    | Creation time of the file                   | Date - include time, **Use same time for all collaborators**
 | `_mtime`    | Last modified time of the file              | Date - include time, **Use same time for all collaborators**
+| `_parent`   | Parent folder of this file                  | Link to record - folders table
 
-_Hopefully in future they'll be a field that adds a link to the folder for the file_
+### File Table with Metadata
+
+All the fields of the in the [files table](#files-table) plus:
+
+| Field               | Description                                 | Type
+| ---                 | ---                                         | ---
+| `_duration`         | Duration of the media                       | Number - 2 decimal places
+| `_video`            | Whether the media has a video stream        | checkbox
+| `_videoStill`       | Whether the file is a image                 | checkbox
+| `_videoCodec`       | Video codec of the media                    | Single line text
+| `_videoWidth`       | Width of the media                          | Number - 0 decimal places
+| `_videoHeight`      | Height of the media                         | Number - 0 decimal places
+| `_videoFormat`      | Pixel format of the media                   | Single line text
+| `_videoAlpha`       | Whether the media has an alpha channel      | checkbox
+| `_videoFPS`         | Frames Per Second of the video, 0 for stills| Number - 2 decimal places
+| `_videoBitRate`     | Bit rate of the video (b)                   | Number - 0 decimal places
+| `_audio`            | Whether the media has a audio stream        | checkbox
+| `_audioCodec`       | Audio codec of the media                    | Single line text
+| `_audioSampleRate`  | Sample rate of the audio (KHz)              | Number - 0 decimal places
+| `_audioChannels`    | Number of channels of audio                 | Number - 0 decimal places
+| `_audioBitRate`     | Bit rate of the audio (b)                   | Number - 0 decimal places
+
 
 ### Field Notes
 
@@ -56,11 +81,15 @@ If all the records are being updated every time, it is likely because of a misma
 Get the latest options by running `tracker -h` which will return something like:
 
 ```
+CLI File Content Tracking
+
 Options:
-  -V, --version        output the version number
-  -c, --config <path>  Config file path (if none specified template will be created)
-  -d, --dry-run        Will do everything apart from updating AirTable
-  -h, --help           display help for command
+  -V, --version          output the version number
+  -c, --config <path>    config file path (if none specified template will be created)
+  -d, --dry-run          will do everything apart from updating AirTable
+  -l, --logging <level>  set the logging level
+  -w, --wipe-cache       clear the metadata cache
+  -h, --help             display help for command
 ```
 
 ### Config Option: -c, --config <path>
@@ -69,7 +98,23 @@ When you run `tracker` for the first time without a path option it will generate
 
 ### Dry-run Option: -d, --dry-run
 
-Inherently, it's nice to know this isn't going to wreak havoc on your AirTable, so if you run `tracker -c config.json -d` it will show you what it's going to do but stop short of modifying the AirTable. It will still run on at the [frequency you specify](#configsettingsfilesfrequency)
+Inherently, it's nice to know this isn't going to wreak havoc on your AirTable, so if you run `tracker -c config.json -d` it will show you what it's going to do but stop short of modifying the AirTable. It will still run on at the [frequency you specify](#configsettingsfilesfrequency). You will need to run with a (#logging-option--l---logging) logging level of verbose to see all the details.
+
+### Logging Option: -l, --logging
+
+Specify one of the following levels of logging:
+
+1. error
+2. warn
+3. info
+4. http (default)
+5. verbose
+6. debug
+7. silly
+
+### Wipe Cache: -w, --wipe-cache
+
+There's a local cache built up in `./db` of the metadata of files so they don't have to keep getting queried via FFMpeg which is a tad computationally expensive, but if you need to rescan all files run with this option. Files will already be automatically scanned if they change size or the modified time changed.
 
 # Config File
 
@@ -154,6 +199,14 @@ _For example, in the example below we're limiting the folders which are stored o
     "excludes": []
   }
 }
+```
+
+#### config.settings.files.mediaMetadata
+
+Whether you want to get all the metadata for the media, which will scrape all the fields in the (files with metadata table)[#file-table-with-metadata], _e.g._
+
+```json
+"mediaMetadata": true
 ```
 
 ### config.settings.airtable

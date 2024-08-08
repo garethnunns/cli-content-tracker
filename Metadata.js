@@ -1,9 +1,12 @@
+import * as path from 'path'
+
 export class Metadata {
 	defaults = {
 		path: '',
 		size: 0,
 		ctime: 0,
-		mtime: 0
+		mtime: 0,
+		parent: []
 	}
 
 	/**
@@ -46,6 +49,10 @@ export class Metadata {
 	get keys() {
 		// these are the fields AirTable will need
 		return Object.keys(this.defaults).map(key => "_" + key)
+	}
+
+	get parentPath() {
+		return path.dirname(this.path)
 	}
 }
 

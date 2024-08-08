@@ -18,7 +18,7 @@ program
 	.description(pjson.description)
 	.option('-c, --config <path>', 'config file path (if none specified template will be created)')
 	.option('-d, --dry-run','will do everything apart from updating AirTable')
-	.option('-l, --logging <level>','Set the logging level')
+	.option('-l, --logging <level>','set the logging level')
 	.option('-w, --wipe-cache', 'clear the metadata cache')
 	.parse(process.argv);
 
@@ -170,11 +170,11 @@ async function contentTracker() {
 		}
 
 		logger.http("Consoling the differences between the local folders and AirTable")
-		const folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList)
+		const folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList, foldersList)
 		logDiffs("Folders", folderDiffs)
 
 		logger.http("Consoling the differences between the local files and AirTable")
-		const fileDiffs = Tracker.checkDiffs(fileList.files, filesList)
+		const fileDiffs = Tracker.checkDiffs(fileList.files, filesList, foldersList)
 		logDiffs("Files", fileDiffs)
 
 		if(!options.dryRun) {

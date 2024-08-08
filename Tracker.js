@@ -33,7 +33,7 @@ export const fileMediaDefaults = metadataFileMedia.fields
  * @param {string} dir 
  * @param {object} includes object containing the rules for including and excluding dirs/files
  * @param {boolean} metadata whether to get all the file metadata
- * @returns object containing the arrays of objects .dirs & .files
+ * @returns object containing the arrays of MetadataFolder & MetadataFile(Media)
  */
 export async function rList(dir, rules, metadata = false) {
 	let result = {
@@ -60,7 +60,7 @@ export async function rList(dir, rules, metadata = false) {
 				if(isAllowed(file, rules.dirs)) {
 					let folderMeta = new MetadataFolder(pathMeta.all)
 					folderMeta.items = fs.readdirSync(file).length
-					result.dirs.push(folderMeta.fields)
+					result.dirs.push(folderMeta)
 				}
 
 				// get everything within that folder
@@ -79,10 +79,12 @@ export async function rList(dir, rules, metadata = false) {
 							.catch(err => {
 								logger.warn("Issue getting metadata for %s", file)
 								logger.error("[%s] %s", err.name, err.message)
-								fileMeta = new MetadataFileMedia(pathMeta.all)
+
+								// return the file with the default extended metadata
+								return new MetadataFileMedia(pathMeta.all)
 							})
 					
-					result.files.push(fileMeta.fields)
+					result.files.push(fileMeta)
 				}
 			}
 		}
@@ -113,7 +115,8 @@ function getFileMetadata(fileMeta) {
 				cacheMeta = await db.get(fileMeta.path)
 			}
 			catch(err) {
-				logger.debug("Fetching metadata for %s", mediaMeta.path)
+				logger.debug("No cache found for %s", mediaMeta.path)
+				logger.silly(err)
 			}
 
 			if(cacheMeta !== undefined 
@@ -125,6 +128,8 @@ function getFileMetadata(fileMeta) {
 				mediaMeta.all = cacheMeta
 				resolve(mediaMeta)
 			}
+
+			logger.debug("Fetching metadata for %s", mediaMeta.path)
 			
 			const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
 			const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
@@ -133,7 +138,7 @@ function getFileMetadata(fileMeta) {
 			mediaMeta.videoStill = metadata?.format.format_long_name.includes("sequence") ?? false
 			
 			const duration = metadata?.format.duration ?? 0
-			mediaMeta.duration = duration != 'N/A' ? duration : 0
+			mediaMeta.duration = duration != 'N/A' & !mediaMeta.videoStill ? duration : 0
 			
 			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
 			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
@@ -143,7 +148,9 @@ function getFileMetadata(fileMeta) {
 
 			// TODO: need to cross-reference list of possible alpha pixel formats...
 			mediaMeta.videoAlpha = videoStream?.pix_fmt.includes('a') ?? false
-			mediaMeta.videoFPS = mediaMeta.videoStill ? 0 : mediaMeta.video ? Number(videoStream.r_frame_rate.split('/')[0]) : 0
+
+			let FPS = videoStream?.r_frame_rate.split('/')[0] / videoStream?.r_frame_rate.split('/')[1]
+			mediaMeta.videoFPS = FPS || !mediaMeta.videoStill ? Math.round(FPS * 100) / 100 : 0
 			mediaMeta.videoBitRate = mediaMeta.video ? (videoStream.bit_rate != 'N/A' ? videoStream.bit_rate : 0) : 0
 
 			mediaMeta.audio = audioStream !== undefined
@@ -228,31 +235,44 @@ export async function airtableToArray(view, defaults = {}) {
 
 /**
  * Work out the differences between local and files on the web
- * @param {array} locals Array of objects of local files
- * @param {array} webs Array of objects of files on AirTable (has ID)
+ * @param {array} locals array of Metadata objects
+ * @param {array} webs array of objects of dirs/files on AirTable (has ID)
+ * @param {array} folderList array of objects of folders on AirTable (has ID)
  * @returns Object containing array of .inserts, .updates & .deletes
  */
-export function checkDiffs(locals,webs) {
+export function checkDiffs(locals, webs, folderList = []) {
+	// clone these as we are going to edit their contents
+	locals = _.cloneDeep(locals)
+	webs = _.cloneDeep(webs)
 
 	let result = { updates: [] }
 
 	locals.forEach((local, lIndex) => {
-		const wIndex = webs.findIndex(web => local._path == web.fields._path)
+		const wIndex = webs.findIndex(web => local.fields._path == web.fields._path)
+
+		const parentID = folderList.find(folder => folder.fields._path == local.parentPath)?.id
+		if(parentID)
+			local.parent = [parentID]
 
 		if(wIndex > -1) {
 			// found the same file on the web table
-			if(!_.isEqual(local,webs[wIndex].fields))
+			if(!_.isEqual(local.fields, webs[wIndex].fields))
+				// but the one on the web is different so add to the updates list
 				result.updates.push({
 					id: webs[wIndex].id,
-					fields: local
+					fields: local.fields
 				})
 
+			// remove this out of the local/web lists
 			delete locals[lIndex]
 			webs.splice(wIndex,1)
 		}
 	})
 
-	result.inserts = locals.filter(el => el != null)
+	// ones to insert are the ones that are only present locally
+	result.inserts = locals.filter(el => el != null).map(el => el.fields)
+	
+	// ones to delete are the ones that are only present in the web list
 	result.deletes = webs
 
 	return result
