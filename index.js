@@ -166,8 +166,6 @@ async function contentTracker() {
 			foldersList = await Tracker.airtableToArray(foldersView, Tracker.dirDefaults)
 			const fileDefaults = config.settings.files.mediaMetadata ? Tracker.fileMediaDefaults : Tracker.fileDefaults
 			filesList = await Tracker.airtableToArray(filesView, fileDefaults)
-
-			logger.silly(filesList)
 		}
 		catch(err) {
 			logger.warn("Failed to fetch file/folder list")
@@ -210,17 +208,20 @@ function logDiffs(tableName, diffs, dry = false) {
 	pre += "%d %s to %s"
 
 	for(const changes in diffs) {
-		logger.verbose(pre, diffs[changes].length, tableName, changes.slice(0, -1))
-		if(diffs[changes].length)
-			logger.debug(diffs[changes].map(el => el?.fields?._path ?? el._path))
+		const action = changes.slice(0, -1)
+		logger.verbose(pre, diffs[changes].length, tableName, action)
+		if(diffs[changes].length && dry || action == "delete")
+			diffs[changes].forEach(change => {
+				logger.debug(chalk.bgBlueBright("to %s:") + " %s", action, change?.fields?._path ?? change._path)
+			})
 	}
 }
 
 function logUpdates(tableName, err, res) {
 	logger.info("AT %s Table: %d added, %d updated & %d deleted", tableName, res.inserts.length, res.updates.length, res.deletes)
 
-	res.inserts.forEach(insert => logger.debug("Inserted %s", insert))
-	res.updates.forEach(update => logger.debug("Updated %s", update))
+	res.inserts.forEach(insert => logger.debug(chalk.bgBlueBright("inserted:") + " %s", insert))
+	res.updates.forEach(update => logger.debug(chalk.bgBlueBright("updated:") + " %s", update))
 	if(err) {
 		logger.warn("Error updating %s table", tableName)
 		logger.error(err)

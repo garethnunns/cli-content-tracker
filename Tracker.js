@@ -54,6 +54,9 @@ export async function rList(dir, options = defaultRListOptions) {
 		dirs: [],
 		files: []
 	}
+
+	logger.silly("Finding files in %s",dir)
+
 	const list = fs.readdirSync(dir)
 
 	let firstFile = true
@@ -135,8 +138,7 @@ function getFileMetadata(fileMeta) {
 				cacheMeta = await db.get(fileMeta.path)
 			}
 			catch(err) {
-				logger.debug("No cache found for %s", mediaMeta.path)
-				logger.silly(err)
+				logger.silly("No cache found for %s", mediaMeta.path)
 			}
 
 			if(cacheMeta !== undefined 
@@ -144,21 +146,21 @@ function getFileMetadata(fileMeta) {
 				&& cacheMeta.mtime == mediaMeta.mtime) {
 				// found the item in cache and it matches the size and last modified time
 				
-				logger.debug("Retreived cached metadata for %s", mediaMeta.path)
+				logger.silly("Retreived cached metadata for %s", mediaMeta.path)
 				mediaMeta.all = cacheMeta
 				resolve(mediaMeta)
 			}
 
-			logger.debug("Fetching metadata for %s", mediaMeta.path)
+			logger.silly("Fetching metadata for %s", mediaMeta.path)
 			
 			const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
 			const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
 	
 			mediaMeta.video = videoStream !== undefined
-			mediaMeta.videoStill = metadata?.format.format_long_name.includes("sequence") ?? false
+			mediaMeta.videoStill = metadata?.format?.format_long_name.includes("sequence") ?? false
 			
 			// see if it's there
-			let duration = metadata?.format.duration ?? 0
+			let duration = metadata?.format?.duration ?? 0
 			// if it's a still or irrelevant set it to 0
 			duration = (duration != 'N/A') || !mediaMeta.videoStill ? duration : 0
 			// round to it 2dp
