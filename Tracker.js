@@ -183,7 +183,13 @@ function getFileMetadata(fileMeta) {
 			mediaMeta.audioChannels = audioStream?.channels ?? 0,
 			mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
 
-			db.put(mediaMeta.path, mediaMeta.all)
+			try {
+				db.put(mediaMeta.path, mediaMeta.all)
+			}
+			catch(err) {
+				logger.warn("Failed to store cache for %s", mediaMeta.path)
+				logger.error("[%s] %s", err.name, err.message)
+			}
 			
 			resolve(mediaMeta)
 		})
