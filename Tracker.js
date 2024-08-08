@@ -28,19 +28,35 @@ export const dirDefaults = metadataFolder.fields
 export const fileDefaults = metadataFile.fields
 export const fileMediaDefaults = metadataFileMedia.fields
 
+const defaultRListOptions = {
+	rules: {
+		dirs: {
+			includes: [],
+			excludes: []
+		},
+		files: {
+			includes: [],
+			excludes: []
+		}
+	},
+	mediaMetadata: true,
+	limitToFirstFile: false
+}
+
 /**
  * Recursively get all the contained files and folders for the given dir
  * @param {string} dir 
- * @param {object} includes object containing the rules for including and excluding dirs/files
- * @param {boolean} metadata whether to get all the file metadata
+ * @param {object} object rules, mediaMetadata & limitToFirstFile
  * @returns object containing the arrays of MetadataFolder & MetadataFile(Media)
  */
-export async function rList(dir, rules, metadata = false) {
+export async function rList(dir, options = defaultRListOptions) {
 	let result = {
 		dirs: [],
 		files: []
 	}
 	const list = fs.readdirSync(dir)
+
+	let firstFile = true
 
 	await Promise.all(list.map(async (file) => {
 		// full file/folder path
@@ -57,24 +73,28 @@ export async function rList(dir, rules, metadata = false) {
 			})
 
 			if (stat.isDirectory()) {
-				if(isAllowed(file, rules.dirs)) {
+				if(isAllowed(file, options.rules.dirs)) {
 					let folderMeta = new MetadataFolder(pathMeta.all)
 					folderMeta.items = fs.readdirSync(file).length
 					result.dirs.push(folderMeta)
 				}
 
 				// get everything within that folder
-				const subFiles = await rList(file, rules, metadata)
+				const subFiles = await rList(file, options)
 
 				result.dirs = result.dirs.concat(subFiles.dirs)
 				result.files = result.files.concat(subFiles.files)
 			}
 			else {
 				// it's a file
-				if(isAllowed(file, rules.files)) {
+				if(isAllowed(file, options.rules.files) 
+				&& (!options.limitToFirstFile  || options.limitToFirstFile && firstFile )) {
+					// either we're not limited to the first file, or we are and this is the first
+					firstFile = false
+					
 					let fileMeta = new MetadataFile(pathMeta.all)
 
-					if(metadata)
+					if(options.metadata)
 						fileMeta = await getFileMetadata(fileMeta)
 							.catch(err => {
 								logger.warn("Issue getting metadata for %s", file)

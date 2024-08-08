@@ -146,7 +146,11 @@ else
 
 async function contentTracker() {
 	logger.verbose("Scanning folders")
-	let fileList = await Tracker.rList(config.settings.files.dir, config.settings.files.rules, config.settings.files.mediaMetadata)
+	let fileList = await Tracker.rList(config.settings.files.dir, {
+		rules: config.settings.files.rules,
+		mediaMetadata: config.settings.files.mediaMetadata,
+		limitToFirstFile: config.settings.files.limitToFirstFile
+	})
 	logger.info("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
 	if(fileList.dirs.length > 0) {

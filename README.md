@@ -209,6 +209,27 @@ Whether you want to get all the metadata for the media, which will scrape all th
 "mediaMetadata": true
 ```
 
+#### config.settings.files.mediaMetadata
+
+This works in conjunction with the [file rules](#configsettingsfilesrules) but limits it to only the first file in each folder, with the intention of finding the first image in sequences, _e.g. this just gets the first TIFF file in the deliveries folder:_
+
+```json
+"rules": {
+    "dirs": {
+      "includes": [],
+      "excludes": []
+    },
+    "files": {
+      "includes": [
+        "/05_Delivery/.*\\.tif/"
+      ],
+      "excludes": []
+    }
+  },
+  "mediaMetadata": true,
+  "limitToFirstFile": true
+```
+
 ### config.settings.airtable
 
 Once you've [setup your AirTable](#airtable-setup), please configure the following settings:
