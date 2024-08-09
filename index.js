@@ -182,8 +182,8 @@ async function contentTracker() {
 		if(!options.dryRun) {
 			logger.http("Updating AirTable")
 			try {
-				Tracker.updateAT(folderDiffs, foldersTable, "Folders", logUpdates)
-				Tracker.updateAT(fileDiffs, filesTable, "Files", logUpdates)
+				await Tracker.updateAT(folderDiffs, foldersTable, "Folders", logUpdates)
+				await Tracker.updateAT(fileDiffs, filesTable, "Files", logUpdates)
 			}
 			catch (err) {
 				logger.warn("Issue updating AirTable")

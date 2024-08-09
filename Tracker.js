@@ -171,50 +171,51 @@ function getFileMetadata(fileMeta) {
 				mediaMeta.all = cacheMeta
 				resolve(mediaMeta)
 			}
-
-			logger.silly("Fetching metadata for %s", mediaMeta.path)
+			else {
+				logger.silly("Fetching metadata for %s", mediaMeta.path)
 			
-			const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
-			const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
-	
-			mediaMeta.video = videoStream !== undefined
-			mediaMeta.videoStill = metadata?.format?.format_long_name.includes("sequence") ?? false
-			
-			// see if it's there
-			let duration = metadata?.format?.duration ?? 0
-			// if it's a still or irrelevant set it to 0
-			duration = (duration != 'N/A') || !mediaMeta.videoStill ? duration : 0
-			// round to it 2dp
-			mediaMeta.duration = Math.round(duration * 100) / 100
-			
-			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
-			mediaMeta.videoCodec = videoStream?.codec_name ?? ''
-			mediaMeta.videoWidth = videoStream?.width ?? 0
-			mediaMeta.videoHeight = videoStream?.height ?? 0
-			mediaMeta.videoFormat = videoStream?.pix_fmt ?? ''
+				const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
+				const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
+		
+				mediaMeta.video = videoStream !== undefined
+				mediaMeta.videoStill = metadata?.format?.format_long_name.includes("sequence") ?? false
+				
+				// see if it's there
+				let duration = metadata?.format?.duration ?? 0
+				// if it's a still or irrelevant set it to 0
+				duration = (duration != 'N/A') || !mediaMeta.videoStill ? duration : 0
+				// round to it 2dp
+				mediaMeta.duration = Math.round(duration * 100) / 100
+				
+				mediaMeta.videoCodec = videoStream?.codec_name ?? ''
+				mediaMeta.videoCodec = videoStream?.codec_name ?? ''
+				mediaMeta.videoWidth = videoStream?.width ?? 0
+				mediaMeta.videoHeight = videoStream?.height ?? 0
+				mediaMeta.videoFormat = videoStream?.pix_fmt ?? ''
 
-			// TODO: need to cross-reference list of possible alpha pixel formats...
-			mediaMeta.videoAlpha = videoStream?.pix_fmt.includes('a') ?? false
+				// TODO: need to cross-reference list of possible alpha pixel formats...
+				mediaMeta.videoAlpha = videoStream?.pix_fmt.includes('a') ?? false
 
-			let FPS = videoStream?.r_frame_rate.split('/')[0] / videoStream?.r_frame_rate.split('/')[1]
-			mediaMeta.videoFPS = (FPS || !mediaMeta.videoStill) ? Math.round(FPS * 100) / 100 : 0
-			mediaMeta.videoBitRate = mediaMeta.video ? (videoStream.bit_rate != 'N/A' ? videoStream.bit_rate : 0) : 0
+				let FPS = videoStream?.r_frame_rate.split('/')[0] / videoStream?.r_frame_rate.split('/')[1]
+				mediaMeta.videoFPS = (FPS || !mediaMeta.videoStill) ? Math.round(FPS * 100) / 100 : 0
+				mediaMeta.videoBitRate = mediaMeta.video ? (videoStream.bit_rate != 'N/A' ? videoStream.bit_rate : 0) : 0
 
-			mediaMeta.audio = audioStream !== undefined
-			mediaMeta.audioCodec = audioStream?.codec_name ?? '',
-			mediaMeta.audioSampleRate = audioStream?.sample_rate ?? 0,
-			mediaMeta.audioChannels = audioStream?.channels ?? 0,
-			mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
+				mediaMeta.audio = audioStream !== undefined
+				mediaMeta.audioCodec = audioStream?.codec_name ?? '',
+				mediaMeta.audioSampleRate = audioStream?.sample_rate ?? 0,
+				mediaMeta.audioChannels = audioStream?.channels ?? 0,
+				mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
 
-			try {
-				await db.put(mediaMeta.path, mediaMeta.all)
+				try {
+					await db.put(mediaMeta.path, mediaMeta.all)
+				}
+				catch(err) {
+					logger.warn("Failed to store cache for %s", mediaMeta.path)
+					logger.error("[%s] %s", err.name, err.message)
+				}
+				
+				resolve(mediaMeta)
 			}
-			catch(err) {
-				logger.warn("Failed to store cache for %s", mediaMeta.path)
-				logger.error("[%s] %s", err.name, err.message)
-			}
-			
-			resolve(mediaMeta)
 		})
 	})
 }
