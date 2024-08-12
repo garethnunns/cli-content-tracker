@@ -1,4 +1,4 @@
-import * as fs from 'fs'
+import { promises as fs } from 'fs'
 import * as path from 'path'
 import _ from 'lodash'
 import { logger } from './logger.js' // TODO: remove all logging from here...
@@ -78,16 +78,26 @@ export async function rList(dir, options = defaultRListOptions) {
 
 	logger.silly("Finding files in %s",dir)
 
-	const list = fs.readdirSync(dir)
+	let list = [dir] // add the root folder in
+	try {
+		list.push(...await fs.readdir(dir))
+	}
+	catch (err) {
+		logger.warn("Failed to read the folder %s", dir)
+		logger.error("[%s] %s", err.name, err.message)
+	}
 
 	let firstFile = true
 
 	await Promise.all(list.map(async (file) => {
-		// full file/folder path
-		file = path.join(dir, file)
+		const rootFolder = file == dir
+		
+		if(!rootFolder)
+			// full file/folder path
+			file = path.join(dir, file)
 
 		try {
-			const stat = fs.statSync(file)
+			const stat = await fs.stat(file)
 
 			const pathMeta = new Metadata({
 				path: file,
@@ -97,22 +107,23 @@ export async function rList(dir, options = defaultRListOptions) {
 			})
 
 			if (stat.isDirectory()) {
-				if(isAllowed(file, options.rules.dirs)) {
+				if(!rootFolder) {
+					// get everything within that folder
+					const subFiles = await rList(file, options)
+
+					result.dirs = result.dirs.concat(subFiles.dirs)
+					result.files = result.files.concat(subFiles.files)
+				}
+				else if(isAllowed(file, options.rules.dirs)) {
 					let folderMeta = new MetadataFolder(pathMeta.all)
-					folderMeta.items = fs.readdirSync(file).length
+					folderMeta.items = list.length - 1
 					result.dirs.push(folderMeta)
 				}
-
-				// get everything within that folder
-				const subFiles = await rList(file, options)
-
-				result.dirs = result.dirs.concat(subFiles.dirs)
-				result.files = result.files.concat(subFiles.files)
 			}
 			else {
 				// it's a file
 				if(isAllowed(file, options.rules.files) 
-				&& (!options.limitToFirstFile  || options.limitToFirstFile && firstFile )) {
+				&& (!options.limitToFirstFile || options.limitToFirstFile && firstFile )) {
 					// either we're not limited to the first file, or we are and this is the first
 					firstFile = false
 					
