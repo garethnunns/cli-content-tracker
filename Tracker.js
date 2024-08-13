@@ -118,8 +118,12 @@ export async function rList(dir, options = {}) {
 
 				if (stat.isDirectory()) {
 					if(!rootFolder) {
+						queue.pause() // take a breather on this folder whilst we look at the subfolder
+
 						// get everything within that folder
 						const subFiles = await rList(file, options)
+
+						queue.start() // carry on with the folder above
 
 						result.dirs = result.dirs.concat(subFiles.dirs)
 						result.files = result.files.concat(subFiles.files)

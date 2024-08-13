@@ -106,17 +106,6 @@ for(let type in config.settings.files.rules)
 	for(let rule in config.settings.files.rules[type])
 		config.settings.files.rules[type][rule] = Tracker.deserialiseREArray(config.settings.files.rules[type][rule])
 
-config.settings.files.dirs.forEach(dir => {
-	try {
-		fs.readdirSync(dir)
-	}
-	catch(err) {
-		logger.warn('Could not access the folder "%s"', dir)
-		logger.error("[%s] %s", err.name, err.message)
-		exit(3)
-	}
-})
-
 logger.http("Attempting AirTable connection")
 
 let base, foldersTable, foldersView, filesTable, filesView
