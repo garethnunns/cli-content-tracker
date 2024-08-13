@@ -148,7 +148,8 @@ async function contentTracker() {
 	let fileList = await Tracker.rLists(config.settings.files.dirs, {
 		rules: config.settings.files.rules,
 		mediaMetadata: config.settings.files.mediaMetadata,
-		limitToFirstFile: config.settings.files.limitToFirstFile
+		limitToFirstFile: config.settings.files.limitToFirstFile,
+		concurrency: config.settings.files.concurrency
 	})
 	logger.info("Found %d folders & %d files ", fileList.dirs.length, fileList.files.length)
 
@@ -213,7 +214,7 @@ function logDiffs(tableName, diffs, dry = false) {
 	for(const changes in diffs) {
 		const action = changes.slice(0, -1)
 		logger.verbose(pre, diffs[changes].length, tableName, action)
-		if(diffs[changes].length && dry || action == "delete")
+		if(diffs[changes].length && (dry || action == "delete"))
 			diffs[changes].forEach(change => {
 				logger.debug(chalk.bgBlueBright("to %s:") + " %s", action, change?.fields?._path ?? change._path)
 			})

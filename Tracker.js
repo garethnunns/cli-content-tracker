@@ -3,6 +3,8 @@ import * as path from 'path'
 import _ from 'lodash'
 import { logger } from './logger.js' // TODO: remove all logging from here...
 
+import PQueue from 'p-queue'
+
 import { Level } from 'level'
 const db = new Level('./.db', { valueEncoding: 'json' })
 
@@ -40,26 +42,29 @@ const defaultRListOptions = {
 		}
 	},
 	mediaMetadata: true,
-	limitToFirstFile: false
+	limitToFirstFile: false,
+	concurrency: 10
 }
 
 /**
  * Get the contents of all the dirs recursively
  * @param {array} dirs array of folder path
- * @param {object} options rules, mediaMetadata & limitToFirstFile
+ * @param {object} options rules, mediaMetadata, limitToFirstFile & concurrency
  * @returns object containing the arrays of MetadataFolder & MetadataFile(Media)
  */
-export async function rLists(dirs, options = defaultRListOptions) {
+export async function rLists(dirs, options = {}) {
+	options = {...defaultRListOptions, ...options}
+
 	let result = {
 		dirs: [],
 		files: []
 	}
 
-	await Promise.all(dirs.map(async dir => {
+	for(const dir of dirs) {
 		const fileList = await rList(dir, options)
 		result.dirs.push(...fileList.dirs)
 		result.files.push(...fileList.files)
-	}))
+	}
 
 	return result
 }
@@ -67,10 +72,12 @@ export async function rLists(dirs, options = defaultRListOptions) {
 /**
  * Recursively get all the contained files and folders for the given dir
  * @param {string} dir 
- * @param {object} object rules, mediaMetadata & limitToFirstFile
+ * @param {object} object rules, mediaMetadata, limitToFirstFile & concurrency
  * @returns object containing the arrays of MetadataFolder & MetadataFile(Media)
  */
-export async function rList(dir, options = defaultRListOptions) {
+export async function rList(dir, options = {}) {
+	options = {...defaultRListOptions, ...options}
+
 	let result = {
 		dirs: [],
 		files: []
@@ -87,67 +94,73 @@ export async function rList(dir, options = defaultRListOptions) {
 		logger.error("[%s] %s", err.name, err.message)
 	}
 
-	let firstFile = true
+	let firstFile = list.map(file => path.join(dir, file)).find(file => path.extname(file) && isAllowed(file, options.rules.files))
 
-	await Promise.all(list.map(async (file) => {
-		const rootFolder = file == dir
-		
-		if(!rootFolder)
-			// full file/folder path
-			file = path.join(dir, file)
+	const queue = new PQueue({concurrency: options.concurrency})
 
-		try {
-			const stat = await fs.stat(file)
+	const listQueue = queue.addAll(list.map((file) => {
+		return async () => {
+			const rootFolder = file == dir
+			
+			if(!rootFolder)
+				// full file/folder path
+				file = path.join(dir, file)
 
-			const pathMeta = new Metadata({
-				path: file,
-				size: stat.size,
-				ctime: stat.ctime.toISOString(),
-				mtime: stat.mtime.toISOString()
-			})
+			try {
+				const stat = await fs.stat(file)
 
-			if (stat.isDirectory()) {
-				if(!rootFolder) {
-					// get everything within that folder
-					const subFiles = await rList(file, options)
+				const pathMeta = new Metadata({
+					path: file,
+					size: stat.size,
+					ctime: stat.ctime.toISOString(),
+					mtime: stat.mtime.toISOString()
+				})
 
-					result.dirs = result.dirs.concat(subFiles.dirs)
-					result.files = result.files.concat(subFiles.files)
+				if (stat.isDirectory()) {
+					if(!rootFolder) {
+						// get everything within that folder
+						const subFiles = await rList(file, options)
+
+						result.dirs = result.dirs.concat(subFiles.dirs)
+						result.files = result.files.concat(subFiles.files)
+					}
+					else if(isAllowed(file, options.rules.dirs)) {
+						let folderMeta = new MetadataFolder(pathMeta.all)
+						folderMeta.items = list.length - 1
+						result.dirs.push(folderMeta)
+					}
 				}
-				else if(isAllowed(file, options.rules.dirs)) {
-					let folderMeta = new MetadataFolder(pathMeta.all)
-					folderMeta.items = list.length - 1
-					result.dirs.push(folderMeta)
+				else {
+					// it's a file
+					if(isAllowed(file, options.rules.files)
+					&& (!options.limitToFirstFile || options.limitToFirstFile && (firstFile === undefined || firstFile == file) )) {
+						// either we're not limited to the first file, or we are and this is the first
+						firstFile = false
+						
+						let fileMeta = new MetadataFile(pathMeta.all)
+
+						if(options.mediaMetadata)
+							fileMeta = await getFileMetadata(fileMeta)
+								.catch(err => {
+									logger.warn("Issue getting metadata for %s", file)
+									logger.error("[%s] %s", err.name, err.message)
+
+									// return the file with the default extended metadata
+									return new MetadataFileMedia(pathMeta.all)
+								})
+						
+						result.files.push(fileMeta)
+					}
 				}
 			}
-			else {
-				// it's a file
-				if(isAllowed(file, options.rules.files) 
-				&& (!options.limitToFirstFile || options.limitToFirstFile && firstFile )) {
-					// either we're not limited to the first file, or we are and this is the first
-					firstFile = false
-					
-					let fileMeta = new MetadataFile(pathMeta.all)
-
-					if(options.mediaMetadata)
-						fileMeta = await getFileMetadata(fileMeta)
-							.catch(err => {
-								logger.warn("Issue getting metadata for %s", file)
-								logger.error("[%s] %s", err.name, err.message)
-
-								// return the file with the default extended metadata
-								return new MetadataFileMedia(pathMeta.all)
-							})
-					
-					result.files.push(fileMeta)
-				}
+			catch (err) {
+				logger.warn("Failed to read %s", file)
+				logger.error("[%s] %s", err.name, err.message)
 			}
-		}
-		catch (err) {
-			logger.warn("Failed to read %s", file)
-			logger.error("[%s] %s", err.name, err.message)
 		}
 	}))
+
+	await listQueue
 
 	return result
 }
