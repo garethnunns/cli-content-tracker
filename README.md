@@ -115,6 +115,10 @@ Specify one of the following levels of logging:
 6. debug
 7. silly
 
+### No Confirm Option: -nc, --no-confirm
+
+By default the script will stop and confirm before it removes more than 10% of the table (if you don't respond in under a minute then it will assume not), but when run with `-nc` it will always delete the records in AirTable.
+
 ### No Delete Option: -nd, --no-delete
 
 This will perform still insert and update records in AirTable, however will not remove them if they have been deleted in the local file system - handy if you are freeing up space on your local disk by deleting media but still want the reference in AirTable.

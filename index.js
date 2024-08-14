@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander'
-import * as fs from 'fs'
-import figlet from 'figlet'
-import chalk from 'chalk'
-import { exit } from 'process'
 import Airtable from 'airtable'
+import chalk from 'chalk'
+import { Command } from 'commander'
+import figlet from 'figlet'
+import * as fs from 'fs'
+import confirm from '@inquirer/confirm'
+import { exit } from 'process'
 import * as Tracker from './Tracker.js'
 import { logger } from './logger.js'
 
@@ -19,6 +20,7 @@ program
 	.option('-c, --config <path>', 'config file path (if none specified template will be created)')
 	.option('-d, --dry-run','will do everything apart from updating AirTable')
 	.option('-l, --logging <level>','set the logging level')
+	.option('-nc, --no-confirm', 'never ask for confirmation before making large changes')
 	.option('-nd, --no-delete', 'never remove records from AirTable')
 	.option('-w, --wipe-cache', 'clear the metadata cache')
 	.parse(process.argv);
@@ -170,13 +172,18 @@ async function contentTracker() {
 		if(!options.delete) {
 			// remove all deletions
 			folderDiffs.deletes = []
-			fileDiffs = []
+			fileDiffs.deletes = []
 		}
 
 		logDiffs("folders", folderDiffs, options.dryRun)
 		logDiffs("files", fileDiffs, options.dryRun)
 
 		if(!options.dryRun) {
+			if(options.confirm) {
+				await confirmDeletes(folderDiffs,foldersList, "folders")
+				await confirmDeletes(fileDiffs,filesList, "files")
+			}
+
 			logger.http("Updating AirTable")
 			try {
 				await Tracker.updateAT(folderDiffs, foldersTable, "Folders", logUpdates)
@@ -226,4 +233,32 @@ function logUpdates(tableName, err, res) {
 		logger.warn("Error updating %s table", tableName)
 		logger.error(err)
 	}
+}
+
+async function confirmDeletes(diffs, remoteList, tableName) {
+	if(diffs.deletes.length > remoteList.length * 0.1) {
+		logger.warn("This will remove over 10% of %s in AirTable", tableName)
+		const confirmed = await asyncCallWithTimeout(confirm({ message: `Would you like to remove the ${diffs.deletes.length} ${tableName}?` }), 60 * 1000)
+		if(!confirmed)
+			diffs.deletes = []
+	}
+}
+
+async function asyncCallWithTimeout(asyncPromise, timeLimit) {
+	let timeoutHandle;
+
+	const timeoutPromise = new Promise((resolve, _reject) => {
+			timeoutHandle = setTimeout(
+					() => {
+						logger.info('Confirm timed out')
+						resolve(false)
+					},
+					timeLimit
+			);
+	});
+
+	return Promise.race([asyncPromise, timeoutPromise]).then(result => {
+			clearTimeout(timeoutHandle)
+			return result
+	})
 }
