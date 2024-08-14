@@ -81,6 +81,8 @@ If all the records are being updated every time, it is likely because of a misma
 Get the latest options by running `tracker -h` which will return something like:
 
 ```
+Usage: tracker [options]
+
 CLI File Content Tracking
 
 Options:
@@ -88,6 +90,7 @@ Options:
   -c, --config <path>    config file path (if none specified template will be created)
   -d, --dry-run          will do everything apart from updating AirTable
   -l, --logging <level>  set the logging level
+  -nd, --no-delete       never remove records from AirTable
   -w, --wipe-cache       clear the metadata cache
   -h, --help             display help for command
 ```
@@ -112,6 +115,10 @@ Specify one of the following levels of logging:
 6. debug
 7. silly
 
+### No Delete Option: -nd, --no-delete
+
+This will perform still insert and update records in AirTable, however will not remove them if they have been deleted in the local file system - handy if you are freeing up space on your local disk by deleting media but still want the reference in AirTable.
+
 ### Wipe Cache: -w, --wipe-cache
 
 There's a local cache built up in `./db` of the metadata of files so they don't have to keep getting queried via FFMpeg which is a tad computationally expensive, but if you need to rescan all files run with this option. Files will already be automatically scanned if they change size or the modified time changed.
@@ -124,7 +131,7 @@ Create the default config as [described above](#config-option--c---config-), whi
   "settings": {
     "files": {
       "dirs": [
-        "~/"
+        "/Users/gareth/Documents/Dev/cli-content-tracker"
       ],
       "frequency": 30,
       "rules": {
@@ -138,7 +145,10 @@ Create the default config as [described above](#config-option--c---config-), whi
             "/\\.DS_Store$/"
           ]
         }
-      }
+      },
+      "mediaMetadata": true,
+      "limitToFirstFile": false,
+      "concurrency": 100
     },
     "airtable": {
       "api": "",
@@ -211,7 +221,7 @@ Whether you want to get all the metadata for the media, which will scrape all th
 "mediaMetadata": true
 ```
 
-#### config.settings.files.mediaMetadata
+#### config.settings.files.limitToFirstFile
 
 This works in conjunction with the [file rules](#configsettingsfilesrules) but limits it to only the first file in each folder, with the intention of finding the first image in sequences, _e.g. this just gets the first TIFF file in the deliveries folder:_
 
@@ -230,6 +240,14 @@ This works in conjunction with the [file rules](#configsettingsfilesrules) but l
   },
   "mediaMetadata": true,
   "limitToFirstFile": true
+```
+
+#### config.settings.files.concurrency
+
+This limits the number of concurrent file operations, introduced to throttle the load on Suite. If you have a computer with enough RAM and the files are static then this value can be larger, however if it's a weak computer and the files are being streamed you might want to limit this to < 10, _e.g._
+
+```json
+"concurrency": 1
 ```
 
 ### config.settings.airtable

@@ -19,6 +19,7 @@ program
 	.option('-c, --config <path>', 'config file path (if none specified template will be created)')
 	.option('-d, --dry-run','will do everything apart from updating AirTable')
 	.option('-l, --logging <level>','set the logging level')
+	.option('-nd, --no-delete', 'never remove records from AirTable')
 	.option('-w, --wipe-cache', 'clear the metadata cache')
 	.parse(process.argv);
 
@@ -54,7 +55,8 @@ if(!options.config) {
 					}
 				},
 				mediaMetadata: true,
-				limitToFirstFile: false
+				limitToFirstFile: false,
+				concurrency: 100
 			},
 			airtable: {
 				api: '',
@@ -161,12 +163,17 @@ async function contentTracker() {
 			return
 		}
 
-		logger.verbose("Consoling the differences between the local folders and AirTable")
-		const folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList, foldersList)
-		logDiffs("folders", folderDiffs, options.dryRun)
+		logger.verbose("Consoling the differences between the local file system and AirTable")
+		let folderDiffs = Tracker.checkDiffs(fileList.dirs, foldersList, foldersList)
+		let fileDiffs = Tracker.checkDiffs(fileList.files, filesList, foldersList)
 
-		logger.verbose("Consoling the differences between the local files and AirTable")
-		const fileDiffs = Tracker.checkDiffs(fileList.files, filesList, foldersList)
+		if(!options.delete) {
+			// remove all deletions
+			folderDiffs.deletes = []
+			fileDiffs = []
+		}
+
+		logDiffs("folders", folderDiffs, options.dryRun)
 		logDiffs("files", fileDiffs, options.dryRun)
 
 		if(!options.dryRun) {
