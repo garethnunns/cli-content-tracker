@@ -225,7 +225,7 @@ function getFileMetadata(fileMeta) {
 				mediaMeta.videoAlpha = videoStream?.pix_fmt.includes('a') ?? false
 
 				let FPS = videoStream?.r_frame_rate.split('/')[0] / videoStream?.r_frame_rate.split('/')[1]
-				mediaMeta.videoFPS = (FPS || !mediaMeta.videoStill) ? Math.round(FPS * 100) / 100 : 0
+				mediaMeta.videoFPS = (FPS && !mediaMeta.videoStill) ? Math.round(FPS * 100) / 100 : 0
 				mediaMeta.videoBitRate = mediaMeta.video ? (videoStream.bit_rate != 'N/A' ? videoStream.bit_rate : 0) : 0
 
 				mediaMeta.audio = audioStream !== undefined
