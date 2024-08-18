@@ -210,7 +210,7 @@ function getFileMetadata(fileMeta) {
 				// see if it's there
 				let duration = metadata?.format?.duration ?? 0
 				// if it's a still or irrelevant set it to 0
-				duration = (duration != 'N/A') || !mediaMeta.videoStill ? duration : 0
+				duration = duration != 'N/A' && !mediaMeta.videoStill ? duration : 0
 				// round to it 2dp
 				mediaMeta.duration = Math.round(duration * 100) / 100
 				
