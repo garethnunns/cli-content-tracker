@@ -12,9 +12,8 @@ import * as ffmpegStatic from 'ffmpeg-static'
 import * as ffprobeStatic from 'ffprobe-static'
 import FfmpegCommand from 'fluent-ffmpeg'
 
-FfmpegCommand.setFfmpegPath(ffmpegStatic.path);
+FfmpegCommand.setFfmpegPath(ffmpegStatic.path)
 FfmpegCommand.setFfprobePath(ffprobeStatic.path)
-FfmpegCommand.setFfmpegPath(ffmpegStatic)
 
 import { Metadata, MetadataFolder, MetadataFileMedia, MetadataFile } from './Metadata.js'
 
