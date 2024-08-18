@@ -8,12 +8,11 @@ import PQueue from 'p-queue'
 import { Level } from 'level'
 const db = new Level('./.db', { valueEncoding: 'json' })
 
-import ffmpegStatic from 'ffmpeg-static'
-import ffprobeStatic from 'ffprobe-static'
+import ffprobeStatic from 'ffmpeg-ffprobe-static'
 import FfmpegCommand from 'fluent-ffmpeg'
 
-FfmpegCommand.setFfmpegPath(ffmpegStatic)
-FfmpegCommand.setFfprobePath(ffprobeStatic.path)
+FfmpegCommand.setFfmpegPath(ffprobeStatic.ffmpegPath)
+FfmpegCommand.setFfprobePath(ffprobeStatic.ffprobePath)
 
 import { Metadata, MetadataFolder, MetadataFileMedia, MetadataFile } from './Metadata.js'
 
