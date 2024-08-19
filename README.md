@@ -28,7 +28,8 @@ You'll need a base with the two following tables for folders & files.
 
 | Field       | Description                                 | Type
 | ---         | ---                                         | ---
-| `_path`     | Will store the full path of the folder      | Single line text
+| `_path`     | Unix path to this folder in the project     | Single line text
+| `_fullPath` | Will store the full path of the folder      | Single line text
 | `_size`     | Size of the folder in bytes                 | Number - 0 decimal places
 | `_ctime`    | Creation time of the folder                 | Date - include time, **Use same time for all collaborators**
 | `_mtime`    | Last modified time of the folder            | Date - include time, **Use same time for all collaborators**
@@ -41,7 +42,8 @@ Only use this smaller table when the [mediaMetadata setting](#configsettingsfile
 
 | Field       | Description                                 | Type
 | ---         | ---                                         | ---
-| `_path`     | Will store the full path of the file        | Single line text
+| `_path`     | Unix path to this folder in the project     | Single line text
+| `_fullPath` | Will store the full path of the folder      | Single line text
 | `_size`     | Size of the file in bytes                   | Number - 0 decimal places
 | `_ctime`    | Creation time of the file                   | Date - include time, **Use same time for all collaborators**
 | `_mtime`    | Last modified time of the file              | Date - include time, **Use same time for all collaborators**
@@ -134,8 +136,9 @@ Create the default config as [described above](#config-option--c---config-), whi
 {
   "settings": {
     "files": {
+      "rootPath": "/Users/user/Documents/cli-content-tracker",
       "dirs": [
-        "/Users/gareth/Documents/Dev/cli-content-tracker"
+        "/Users/user/Documents/cli-content-tracker"
       ],
       "frequency": 30,
       "rules": {
@@ -173,11 +176,18 @@ In general, leave all the parameters in the JSON file, there is some error handl
 
 This section relates to all the local file scanning. The script in general builds up a list of all the files and folders and here you get a bit of control over that.
 
+#### config.settings.files.rootPath
+
+In an effort to make the script less dependent on exactly where the files are stored on your computer/where the folder is mounted, this string will be removed from the start of file paths.
+```json
+"rootPath": "/Volumes/Suite/Project"
+```
+
 #### config.settings.files.dirs
 
 Array of irectory to recursively search through, _e.g._
 ```json
-"dirs": [ "/Volumes/Suite/", "/Volumes/remote/" ]
+"dirs": [ "/Volumes/Suite/Project/Item 1", "/Volumes/Suite/Project/Item 2" ]
 ```
 
 #### config.settings.files.frequency

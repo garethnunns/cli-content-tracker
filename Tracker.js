@@ -20,15 +20,16 @@ const metadataFolder = new MetadataFolder()
 const metadataFile = new MetadataFile()
 const metadataFileMedia = new MetadataFileMedia()
 
-export const dirFields = metadataFolder.keys
-export const fileFields = metadataFile.keys
-export const fileMediaFields = metadataFileMedia.keys
+export const dirFields = metadataFolder._keys
+export const fileFields = metadataFile._keys
+export const fileMediaFields = metadataFileMedia._keys
 
 export const dirDefaults = metadataFolder.fields
 export const fileDefaults = metadataFile.fields
 export const fileMediaDefaults = metadataFileMedia.fields
 
 const defaultRListOptions = {
+	rootPath: '',
 	rules: {
 		dirs: {
 			includes: [],
@@ -108,7 +109,8 @@ export async function rList(dir, options = {}) {
 				const stat = await fs.stat(file)
 
 				const pathMeta = new Metadata({
-					path: file,
+					rootPath: options.rootPath,
+					fullPath: file,
 					size: stat.size,
 					ctime: stat.ctime.toISOString(),
 					mtime: stat.mtime.toISOString()
@@ -116,12 +118,14 @@ export async function rList(dir, options = {}) {
 
 				if (stat.isDirectory()) {
 					if(!rootFolder) {
-						queue.pause() // take a breather on this folder whilst we look at the subfolder
+						// take a breather on this folder whilst we look at the subfolder
+						queue.pause()
 
 						// get everything within that folder
 						const subFiles = await rList(file, options)
 
-						queue.start() // carry on with the folder above
+						// carry on with the folder above
+						queue.start()
 
 						result.dirs = result.dirs.concat(subFiles.dirs)
 						result.files = result.files.concat(subFiles.files)
@@ -174,7 +178,7 @@ export async function rList(dir, options = {}) {
  */
 function getFileMetadata(fileMeta) {
 	return new Promise((resolve, reject) => {
-		FfmpegCommand.ffprobe(fileMeta.path, async (err, metadata) => {
+		FfmpegCommand.ffprobe(fileMeta.fullPath, async (err, metadata) => {
 			if(err)
 				reject(err)
 
@@ -182,10 +186,10 @@ function getFileMetadata(fileMeta) {
 
 			let cacheMeta
 			try{
-				cacheMeta = await db.get(fileMeta.path)
+				cacheMeta = await db.get(fileMeta.fullPath)
 			}
 			catch(err) {
-				logger.silly("No cache found for %s", mediaMeta.path)
+				logger.silly("No cache found for %s", mediaMeta.fullPath)
 			}
 
 			if(cacheMeta !== undefined 
@@ -193,12 +197,12 @@ function getFileMetadata(fileMeta) {
 				&& cacheMeta.mtime == mediaMeta.mtime) {
 				// found the item in cache and it matches the size and last modified time
 				
-				logger.silly("Retreived cached metadata for %s", mediaMeta.path)
+				logger.silly("Retreived cached metadata for %s", mediaMeta.fullPath)
 				mediaMeta.all = cacheMeta
 				resolve(mediaMeta)
 			}
 			else {
-				logger.silly("Fetching metadata for %s", mediaMeta.path)
+				logger.silly("Fetching metadata for %s", mediaMeta.fullPath)
 			
 				const videoStream = metadata?.streams.find((stream) => stream.codec_type == 'video')
 				const audioStream = metadata?.streams.find((stream) => stream.codec_type == 'audio')
@@ -233,10 +237,10 @@ function getFileMetadata(fileMeta) {
 				mediaMeta.audioBitRate = audioStream?.bit_rate ?? 0
 
 				try {
-					await db.put(mediaMeta.path, mediaMeta.all)
+					await db.put(mediaMeta.fullPath, mediaMeta.all)
 				}
 				catch(err) {
-					logger.warn("Failed to store cache for %s", mediaMeta.path)
+					logger.warn("Failed to store cache for %s", mediaMeta.fullPath)
 					logger.error("[%s] %s", err.name, err.message)
 				}
 				

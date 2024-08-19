@@ -40,6 +40,7 @@ if(!options.config) {
 	const defaults = {
 		settings: {
 			files: {
+				rootPath: import.meta.dirname,
 				dirs: [
 					import.meta.dirname
 				],
@@ -139,6 +140,7 @@ contentTracker()
 async function contentTracker() {
 	logger.verbose("Scanning folders")
 	let fileList = await Tracker.rLists(config.settings.files.dirs, {
+		rootPath: config.settings.files.rootPath,
 		rules: config.settings.files.rules,
 		mediaMetadata: config.settings.files.mediaMetadata,
 		limitToFirstFile: config.settings.files.limitToFirstFile,

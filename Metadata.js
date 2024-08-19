@@ -1,8 +1,10 @@
 import * as path from 'path'
 
 export class Metadata {
+	rootPath = ''
+
 	defaults = {
-		path: '',
+		fullPath: '',
 		size: 0,
 		ctime: 0,
 		mtime: 0,
@@ -18,7 +20,9 @@ export class Metadata {
   }
 
 	get all() {
-		let all = {}
+		let all = {
+			rootPath: this.rootPath
+		}
 
 		Object.keys(this.defaults).forEach(key => {
 			all[key] = this[key]
@@ -30,25 +34,35 @@ export class Metadata {
 	set all(values = {}) {
 		const valuesWithDefs = {...this.defaults, ...values}
 
-		Object.keys(this.defaults).forEach(key => {
+		Object.keys(valuesWithDefs).forEach(key => {
 			this[key] = valuesWithDefs[key]
 		})
+	}
+
+	get path() {
+		const projPath = this.fullPath.startsWith(this.rootPath) ? this.fullPath.slice(this.rootPath.length) : this.fullPath
+		// normalise it to a unix style path
+		return projPath.replaceAll(path.sep, path.posix.sep)
 	}
 
 	get fields() {
 		// this is what is sent to AirTable
 		let fields = {}
 
-		Object.keys(this.all).forEach(key => {
-			fields["_"+key] = this[key]
+		this.keys.forEach(key => {
+			fields["_" + key] = this[key]
 		})
 		
 		return fields
 	}
 
 	get keys() {
+		return ["path", ...Object.keys(this.defaults)]
+	}
+
+	get _keys() {
 		// these are the fields AirTable will need
-		return Object.keys(this.defaults).map(key => "_" + key)
+		return this.keys.map(key => "_" + key)
 	}
 
 	get parentPath() {
